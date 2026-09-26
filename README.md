@@ -20,11 +20,21 @@ This is not a general-purpose map dashboard. Every screen moves you toward a ran
 
 | | What | State |
 |---|---|---|
+| | What | State |
+|---|---|---|
 | v1 | Pipeline with validation, two-container Compose setup, three-step map | done |
-| v2 part A | Catchments with population, choropleth, fitted map, marker collision, fixed panel footer | done, in review |
-| v2 part B | Footfall model and market types (scikit-learn), detail drawer, chat over the localities, test harness, `make verify` | in progress for the final submission |
+| v2 part A | Catchments with population, choropleth, fitted map, marker collision, fixed panel footer | done |
+| v2 part B | Footfall model and market types (scikit-learn), detail drawer, How it works | done |
+| v2 chat | FastAPI service with retrieval, refusal and optional Gemini, the Ask step | done |
+| v2 checks | pytest, Playwright end-to-end and visual tests, `make verify`, CI | done |
 
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has diagrams of the current and planned setup. [DECISIONS.md](DECISIONS.md) logs the choices behind it.
+| Document | What's in it |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the containers and how data flows between them |
+| [DECISIONS.md](DECISIONS.md) | each design choice and why |
+| [MODEL_CARD.md](MODEL_CARD.md) | the footfall model: inputs, evaluation, how to read it, limits |
+| [DATA_LICENSES.md](DATA_LICENSES.md) | the terms for every data source and tool |
+| [docs/QA.md](docs/QA.md) | the manual checks before a demo |
 
 ## Run it
 
@@ -171,6 +181,32 @@ It was exported once from the original spreadsheet so that changes show up in di
 One row in the source is blank, and the pipeline drops it and logs why. That leaves 259 POIs: 165 cafes and 94 QSRs.
 
 `seed_data/catchments.geojson` gives each locality an area and a population. The area is its Voronoi cell, cut back to within 2 km of its own outlets; OpenStreetMap has no municipal boundary for Pune to clip to. The population comes from Meta's High Resolution Settlement Layer (30 m cells, CC BY 4.0): 5.15 million people across the 51 catchments. [seed_data/SOURCES.md](seed_data/SOURCES.md) explains how the file is built and how to rebuild it.
+
+## Limitations
+
+- **Reviews stand in for footfall.** They grow with an outlet's age and skew towards people who write reviews. The footfall model explains 12% of the variation on unseen localities, so its estimates come with wide ranges and are for comparing places, not forecasting sales. See [MODEL_CARD.md](MODEL_CARD.md).
+- **259 outlets, one snapshot.** The seed is a September 2026 Google Places pull. Openings and closures since then aren't there, and there's no seasonality.
+- **Catchments aren't wards.** They're drawn from where outlets are, not official boundaries, and they count residents, not daytime crowds. Office districts such as Hinjewadi look more crowded per head than they feel at lunchtime.
+- **The late-night flag looks synthetic.** It's 36% in both formats. It's used, but it barely moves anything.
+- **Market types overlap.** A silhouette of 0.24 means they're labels, not firm categories, and they never feed the score.
+- **The chat's refusal was tuned on 41 questions.** It refuses clearly off-topic ones and answers anything naming a locality, but an odd phrasing can land on the wrong side.
+- **No costs.** Rent, footfall counts and delivery demand would change the answer, and none of them are in the data.
+
+## Course requirements (OST, T3923)
+
+Localio is my mini-project for Open Source Tools for Data Science. Where each part of the rubric is evidenced:
+
+| Rubric item | Evidence |
+|---|---|
+| Problem statement and scope | The opening of this README, and [Scope](#scope) |
+| Repository and commit discipline | One GitHub issue per piece of work, a feature branch and pull request for each, and commits with messages that say what changed and why (`git log`) |
+| Architecture design | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): three services with health checks and start conditions, a read-only bind mount, nginx as reverse proxy |
+| Working containerised pipeline | `docker compose up --build` runs clean, aggregate, model, validate, then serves the map and the chat |
+| Reproducibility on another machine | GitHub Actions rebuilds and runs every check on a clean Ubuntu runner for every pull request; `make verify` does the same locally. No secrets are needed, and the derived population data is committed |
+| Documentation | This README, the architecture, decisions, model card, licences and QA documents listed under [Status](#status) |
+| Open-source licensing | [LICENSE](LICENSE) (MIT) and [DATA_LICENSES.md](DATA_LICENSES.md), which lists each data source and tool with its licence, including what the MIT licence doesn't cover |
+| Linux and open-source tooling | Debian-slim and Alpine images, a bash verify script, a Makefile, Ubuntu CI, and only open-source libraries in the build |
+| Acting on CA3 feedback | Each point from the first review becomes an issue labelled [`ca3-feedback`](https://github.com/33avash/Localio/issues?q=label%3Aca3-feedback), closed by the pull request that addresses it |
 
 ## Troubleshooting
 
