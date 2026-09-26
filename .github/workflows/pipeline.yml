@@ -1,6 +1,7 @@
 # Runs the whole Compose stack on a clean Ubuntu machine for every pull
-# request: the pipeline's own checks, then the site serving its output.
-# It's the same `docker compose up` the README tells people to run.
+# request: the pipeline's checks, both pytest suites, the chat evaluation,
+# live calls through nginx and the Playwright tests. `make verify` runs the
+# same checks locally.
 name: pipeline
 
 on:
@@ -57,6 +58,18 @@ jobs:
           done
           curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json'             -d '{"question": "Tell me about Koregaon Park"}'             | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['cited'] == ['Koregaon Park']"
           curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json'             -d '{"question": "who won the world cup"}'             | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['refused']"
+
+      - name: End-to-end and visual tests
+        env:
+          CI: "true"
+        run: docker compose --profile test run --rm --build e2e
+
+      - name: Keep Playwright's diffs if a test failed
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: tests/e2e/test-results/
 
       - name: Stop
         if: always()
