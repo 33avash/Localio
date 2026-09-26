@@ -91,7 +91,7 @@ export function createMap(element, { cartoKey, onSelect }) {
     areaLayers = new Map();
     drawAreas(view);
     drawOutlets(view);
-    if (view.step === 3) drawPicks(view);
+    if (view.step >= 3) drawPicks(view);
     legend.getContainer().innerHTML = legendHtml(view, showOutlets(view), legendOpen);
   }
 
@@ -129,7 +129,7 @@ export function createMap(element, { cartoKey, onSelect }) {
   // too few outlets for a confident score get a hatch on top. Hovering
   // shows the name and headline figure; clicking opens the detail drawer.
   function drawAreas(view) {
-    const shortlisted = view.step === 3;
+    const shortlisted = view.step >= 3;
     for (const locality of view.localities) {
       const { name } = locality.properties;
       const dimmed = shortlisted && !view.picks.includes(locality);

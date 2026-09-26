@@ -1,9 +1,17 @@
 import { CATEGORIES, escapeHtml, num, otherCategory } from "./format.js";
 import { LENSES, rationale } from "./score.js";
 
-export const STEPS = ["Format", "Priority", "Shortlist"];
+export const STEPS = ["Format", "Priority", "Shortlist", "Ask"];
 
-const VIEWS = { 1: chooseCategory, 2: chooseLens, 3: shortlist };
+// Drawn from api/tests/ask_cases.jsonl, so every example is one the tests
+// know gets a good answer.
+export const EXAMPLES = [
+  "Where should I open a QSR?",
+  "Which areas have no cafes yet?",
+  "Tell me about Koregaon Park",
+];
+
+const VIEWS = { 1: chooseCategory, 2: chooseLens, 3: shortlist, 4: chat };
 
 // The panel has three fixed regions: the step rail in the header, one
 // scrolling body, and a footer that keeps the step's main action in view.
@@ -111,7 +119,45 @@ function shortlist({ category, lens, filters }, { meta, localities, ranking, ave
       <p class="note">${num(confident)} localities have at least ${num(meta.min_pois_to_score)} cafes and QSRs
         between them. The other ${num(localities.length - confident)} are scored too, but hatched on the map and
         left off this list unless you include them, because so few outlets make their numbers shaky.</p>`,
-    foot: `<button class="secondary" data-action="restart">Start over</button>`,
+    foot: `
+      <div class="foot-actions">
+        <button class="secondary" data-action="restart">Start over</button>
+        <button class="primary" data-action="next">Ask about these</button>
+      </div>`,
+  };
+}
+
+// Ask: questions answered from the same locality facts as the map. Your
+// messages sit right in a bubble; answers are plain text, with the
+// localities they rely on as chips that open the drawer.
+function chat(_, { conversation }) {
+  const { messages, pending, draft } = conversation;
+  const items = messages.map((m) => (m.role === "user"
+    ? `<li class="msg msg-user">${escapeHtml(m.text)}</li>`
+    : `<li class="msg msg-answer${m.refused ? " msg-refused" : ""}${m.error ? " msg-error" : ""}">
+        <p>${escapeHtml(m.text)}</p>
+        ${m.cited?.length ? `<div class="chips">${m.cited.map((name) =>
+          `<button class="chip" data-action="open-locality" data-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("")}</div>` : ""}
+        ${m.mode === "offline" ? '<p class="msg-note">Answered from templates, without a language model.</p>' : ""}
+      </li>`));
+  const examples = messages.length ? "" : `
+    <p class="lede">Ask about any of the 51 localities, or where a format fits best. Answers only use Localio's data.</p>
+    <div class="examples">${EXAMPLES.map((q) =>
+      `<button class="example" data-action="ask" data-value="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}</div>`;
+  return {
+    body: `
+      <h2 tabindex="-1">Ask</h2>
+      ${examples}
+      <ol class="messages" aria-live="polite" aria-label="Conversation">${items.join("")}
+        ${pending ? '<li class="msg msg-answer typing" aria-label="Writing an answer"><span></span><span></span><span></span></li>' : ""}
+      </ol>`,
+    foot: `
+      <form class="ask-form" data-form="ask">
+        <label class="visually-hidden" for="ask-input">Your question</label>
+        <textarea id="ask-input" rows="2" maxlength="300" placeholder="Ask about a locality or a format"
+          ${pending ? "disabled" : ""}>${escapeHtml(draft)}</textarea>
+        <button class="primary" type="submit" ${pending ? "disabled" : ""}>Send</button>
+      </form>`,
   };
 }
 

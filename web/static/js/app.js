@@ -52,7 +52,11 @@ async function loadData() {
 
 const data = await loadData();
 
-const state = { ...readHash(), filters: { maxCompetitors: null, includeLow: false } };
+const state = {
+  ...readHash(),
+  filters: { maxCompetitors: null, includeLow: false },
+  conversation: { messages: [], pending: false, draft: "" },
+};
 let shown = { ranking: [], lens: null, scores: new Map(), widths: new Map() };
 let returnFocus = null;
 // Matches the sheet's height transition in localio.css.
@@ -81,6 +85,7 @@ const drawerActions = {
   "open-locality": (value) => openLocality(value, { fly: true }),
   "close-drawer": () => closeDrawer(),
   method: () => openDrawer(methodHtml(data?.report)),
+  ask: (value) => send(value),
 };
 
 panel.addEventListener("click", (event) => {
@@ -97,6 +102,24 @@ panel.addEventListener("click", (event) => {
   restoreFocus(control, state.step !== previousStep);
 });
 
+// The chat input: Enter sends, Shift+Enter adds a line, and the draft
+// survives re-renders.
+panel.addEventListener("submit", (event) => {
+  if (!event.target.matches("[data-form=ask]")) return;
+  event.preventDefault();
+  send(event.target.querySelector("textarea").value);
+});
+
+panel.addEventListener("keydown", (event) => {
+  if (event.target.id !== "ask-input" || event.key !== "Enter" || event.shiftKey) return;
+  event.preventDefault();
+  event.target.form.requestSubmit();
+});
+
+panel.addEventListener("input", (event) => {
+  if (event.target.id === "ask-input") state.conversation.draft = event.target.value;
+});
+
 panel.addEventListener("change", (event) => {
   const filter = event.target.closest("[data-filter]");
   if (!filter) return;
@@ -111,13 +134,14 @@ document.addEventListener("keydown", (event) => {
 });
 
 function render() {
-  const ranking = state.step === 3 ? shortlist(state.filters) : [];
+  const ranking = state.step >= 3 ? shortlist(state.filters) : [];
   renderPanel(regions, state, {
     meta: data.meta,
     localities: data.localities,
     ranking,
     averageRating: state.category && cityRating(data.pois, state.category),
     empty: state.step === 3 && !ranking.length ? emptyExplanation() : null,
+    conversation: state.conversation,
   });
   map.render({
     step: state.step,
@@ -160,6 +184,44 @@ function wireRows(ranking) {
     scores: new Map(rows.map((row) => [row.dataset.name, Number(row.querySelector(".pick-score").dataset.score)])),
     widths: new Map(rows.map((row) => [row.dataset.name, parseFloat(row.querySelector(".pick-bar").style.width)])),
   };
+}
+
+async function send(text) {
+  const question = text.trim();
+  const { conversation } = state;
+  if (!question || conversation.pending) return;
+  conversation.messages.push({ role: "user", text: question });
+  conversation.pending = true;
+  conversation.draft = "";
+  renderChat();
+  conversation.messages.push(await answer(question));
+  conversation.pending = false;
+  renderChat();
+  document.getElementById("ask-input")?.focus();
+}
+
+async function answer(question) {
+  try {
+    const response = await fetch("api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, category: state.category, lens: state.lens }),
+    });
+    // 502-504 come from nginx when the api container isn't there.
+    if (response.status >= 502) throw new Error(`HTTP ${response.status}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return { role: "answer", error: true, text: body.detail ?? `The chat service returned HTTP ${response.status}.` };
+    return { role: "answer", text: body.answer, cited: body.cited, refused: body.refused, mode: body.mode };
+  } catch {
+    return { role: "answer", error: true, text: "The chat service isn't reachable. The map and shortlist still work." };
+  }
+}
+
+// Re-render the Ask step and keep the newest message in view.
+function renderChat() {
+  if (state.step !== 4) return;
+  render();
+  regions.body.scrollTop = regions.body.scrollHeight;
 }
 
 function shortlist({ maxCompetitors, includeLow }) {
@@ -244,7 +306,7 @@ function readHash() {
   const knownLens = Object.hasOwn(LENSES, lens ?? "") ? lens : null;
   let step = Math.max(1, STEPS.findIndex((name) => name.toLowerCase() === stepName) + 1);
   if (!category) step = 1;
-  else if (step === 3 && !knownLens) step = 2;
+  else if (step >= 3 && !knownLens) step = 2;
   return { step, category, lens: knownLens };
 }
 
