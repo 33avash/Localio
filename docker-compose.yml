@@ -1,0 +1,10 @@
+name: localio
+
+services:
+  data:
+    build: ./data
+    volumes:
+      # Bind mounts, not named volumes: a named volume keeps old GeoJSON
+      # between runs, and the map would quietly show stale numbers.
+      - ./seed_data:/app/seed_data:ro
+      - ./output:/app/output
