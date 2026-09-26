@@ -1,0 +1,45 @@
+# Runs the whole Compose stack on a clean Ubuntu machine for every pull
+# request: the pipeline's own checks, then the site serving its output.
+# It's the same `docker compose up` the README tells people to run.
+name: pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  compose:
+    name: Build and run with Docker Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build, run the pipeline and start the site
+        # web waits for data to exit 0, so this fails if any check fails.
+        run: docker compose up --build --detach web
+
+      - name: Pipeline log
+        if: always()
+        run: docker compose logs data
+
+      - name: Pipeline exited cleanly
+        run: test "$(docker compose ps --all --format '{{.ExitCode}}' data)" = "0"
+
+      - name: Site and data are served
+        run: |
+          for attempt in $(seq 1 15); do
+            curl -fsS -o /dev/null http://localhost:8080/ && break
+            sleep 2
+          done
+          curl -fsS -o /dev/null http://localhost:8080/
+          curl -fsS http://localhost:8080/data/localities.geojson \
+            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'localities'); assert n == 51"
+          curl -fsS http://localhost:8080/data/pois.geojson \
+            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'outlets'); assert n == 259"
+          curl -fsS http://localhost:8080/config.json
+
+      - name: Stop
+        if: always()
+        run: docker compose down
