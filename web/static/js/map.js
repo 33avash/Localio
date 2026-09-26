@@ -29,8 +29,9 @@ export function createMap(element, { cartoKey }) {
     maxBounds: PUNE_BOUNDS,
     maxBoundsViscosity: 1,
   });
-  basemap(cartoKey).addTo(map);
+  const tiles = basemap(cartoKey).addTo(map);
   element.classList.toggle("basemap-osm", !cartoKey);
+  watchTiles(map, tiles, element);
 
   // Leaflet measures its container once. Any later size change (the mobile
   // sheet opening or closing, crossing the breakpoint) needs a re-measure,
@@ -175,6 +176,30 @@ function basemap(cartoKey) {
     );
   }
   return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: OSM_ATTRIBUTION });
+}
+
+// Bad wifi shouldn't sink the demo: if tiles fail more often than they load,
+// switch to a flat background and say so once. Markers and the whole flow
+// work without a basemap.
+function watchTiles(map, tiles, element) {
+  let loaded = 0;
+  let failed = 0;
+  let noticed = false;
+  tiles.on("tileload", () => { loaded += 1; });
+  tiles.on("tileerror", () => {
+    failed += 1;
+    if (noticed || failed <= loaded) return;
+    noticed = true;
+    element.classList.add("no-basemap");
+    const notice = L.control({ position: "topright" });
+    notice.onAdd = () => {
+      const div = L.DomUtil.create("div", "basemap-notice");
+      div.setAttribute("role", "status");
+      div.textContent = "Basemap unavailable. Markers and scores still work.";
+      return div;
+    };
+    notice.addTo(map);
+  });
 }
 
 function count(locality, category) {

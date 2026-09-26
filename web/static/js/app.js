@@ -1,6 +1,6 @@
 import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
-import { renderPanel, STEPS } from "./panel.js";
+import { renderLoadError, renderPanel, STEPS } from "./panel.js";
 import { cityRating, LENSES, rank } from "./score.js";
 
 const panel = document.getElementById("panel-body");
@@ -14,7 +14,9 @@ sheetHandle.addEventListener("click", () => {
 });
 
 async function getJson(url) {
-  const response = await fetch(url);
+  const response = await fetch(url).catch(() => {
+    throw new Error(`${url}: no response from the server`);
+  });
   if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
   return response.json();
 }
@@ -23,10 +25,23 @@ async function getJson(url) {
 const config = await getJson("config.json").catch(() => ({}));
 const map = createMap(document.getElementById("map"), { cartoKey: config.cartoKey });
 
-const [pois, localities] = await Promise.all([
-  getJson("data/pois.geojson"),
-  getJson("data/localities.geojson"),
-]);
+// A failed load says so in the panel, where people are looking, rather
+// than leaving a blank map and an error in the console.
+async function loadData() {
+  try {
+    const [pois, localities] = await Promise.all([
+      getJson("data/pois.geojson"),
+      getJson("data/localities.geojson"),
+    ]);
+    if (!pois.features?.length || !localities.features?.length) throw new Error("The GeoJSON files are empty.");
+    return { pois: pois.features, localities: localities.features, meta: localities.meta };
+  } catch (error) {
+    renderLoadError(panel, error.message);
+    return null;
+  }
+}
+
+const data = await loadData();
 
 const state = readHash();
 
@@ -56,20 +71,20 @@ panel.addEventListener("click", (event) => {
 });
 
 function render() {
-  const ranking = state.step === 3 ? rank(localities.features, state.category, state.lens) : [];
+  const ranking = state.step === 3 ? rank(data.localities, state.category, state.lens) : [];
   renderPanel(panel, state, {
-    meta: localities.meta,
-    localities: localities.features,
+    meta: data.meta,
+    localities: data.localities,
     ranking,
-    averageRating: state.category && cityRating(pois.features, state.category),
+    averageRating: state.category && cityRating(data.pois, state.category),
   });
   map.render({
     step: state.step,
     category: state.category,
     lens: state.lens,
-    meta: localities.meta,
-    pois: pois.features,
-    localities: localities.features,
+    meta: data.meta,
+    pois: data.pois,
+    localities: data.localities,
     picks: ranking.slice(0, 5).map(({ feature }) => feature),
   });
   writeHash();
@@ -101,4 +116,4 @@ function writeHash() {
   history.replaceState(null, "", hash || location.pathname);
 }
 
-render();
+if (data) render();

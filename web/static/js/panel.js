@@ -9,6 +9,15 @@ export function renderPanel(element, state, data) {
   element.innerHTML = progress(state.step) + VIEWS[state.step](state, data);
 }
 
+export function renderLoadError(element, detail) {
+  element.innerHTML = `
+    <div class="status" role="alert">
+      <p class="status-title">Could not load map data — is the data container finished?</p>
+      <p>Run <code>docker compose up</code>, wait for the data container to exit, then reload.</p>
+      <p class="status-detail">${escapeHtml(detail)}</p>
+    </div>`;
+}
+
 function progress(current) {
   const items = STEPS.map((label, i) => {
     const step = i + 1;
