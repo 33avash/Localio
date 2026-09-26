@@ -1,8 +1,8 @@
 import { CATEGORIES, num } from "./format.js";
 import { localityPopup, outletPopup } from "./popups.js";
 
+// Only a starting point while data loads; fitData() then frames the catchments.
 const PUNE = [18.5204, 73.8567];
-const PUNE_BOUNDS = [[18.40, 73.65], [18.68, 73.98]];
 
 const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -25,11 +25,13 @@ export function createMap(element, { cartoKey }) {
   const map = L.map(element, {
     center: PUNE,
     zoom: 12,
-    minZoom: 10,
     maxZoom: 16,
-    maxBounds: PUNE_BOUNDS,
-    maxBoundsViscosity: 1,
+    maxBoundsViscosity: 0.8,
+    // Quarter steps let fitData() frame the catchments closely on any
+    // screen instead of dropping a whole zoom level to make them fit.
+    zoomSnap: 0.25,
   });
+  let dataBounds = null;
   const tiles = basemap(cartoKey).addTo(map);
   element.classList.toggle("basemap-osm", !cartoKey);
   watchTiles(map, tiles, element);
@@ -52,6 +54,9 @@ export function createMap(element, { cartoKey }) {
   let pickMarkers = [];
   let lastView = null;
   let outletsChoice = null;
+  // On a phone the legend would cover a third of the map, so it starts
+  // folded down to its title there. Whatever the user picks then sticks.
+  let legendOpen = !window.matchMedia("(max-width: 859px)").matches;
 
   const legend = L.control({ position: "bottomright" });
   legend.onAdd = () => {
@@ -62,6 +67,7 @@ export function createMap(element, { cartoKey }) {
       outletsChoice = event.target.checked;
       drawOutlets(lastView);
     });
+    div.addEventListener("toggle", (event) => { legendOpen = event.target.open; }, true);
     return div;
   };
   legend.addTo(map);
@@ -76,7 +82,7 @@ export function createMap(element, { cartoKey }) {
     drawAreas(view);
     drawOutlets(view);
     if (view.step === 3) drawPicks(view);
-    legend.getContainer().innerHTML = legendHtml(view, showOutlets(view));
+    legend.getContainer().innerHTML = legendHtml(view, showOutlets(view), legendOpen);
   }
 
   // Dots are on by default while choosing a format and off after that,
@@ -156,11 +162,22 @@ export function createMap(element, { cartoKey }) {
     map.flyTo(marker.getLatLng(), 14, { duration: 1.2 });
   }
 
-  function resetView() {
-    map.setView(PUNE, 12);
+  // Frame the catchments instead of a fixed centre, which showed mostly
+  // empty terrain. Panning stops a little past the data, and zooming out
+  // stops one level past the framed view.
+  function fitData(localities) {
+    map.invalidateSize();
+    dataBounds = L.geoJSON({ type: "FeatureCollection", features: localities }).getBounds();
+    map.fitBounds(dataBounds, { padding: [40, 40], maxZoom: 13, animate: false });
+    map.setMaxBounds(dataBounds.pad(0.15));
+    map.setMinZoom(map.getZoom() - 1);
   }
 
-  return { render, focusPick, resetView };
+  function resetView() {
+    map.fitBounds(dataBounds, { padding: [40, 40], maxZoom: 13 });
+  }
+
+  return { render, fitData, focusPick, resetView };
 }
 
 function densityClass(locality, category) {
@@ -181,7 +198,7 @@ function ensureHatchPattern(map) {
     </defs>`);
 }
 
-function legendHtml(view, outletsOn) {
+function legendHtml(view, outletsOn, open) {
   const { category, meta, picks } = view;
   const ranges = meta.density_ranges[category ?? "total"];
   const classes = [5, 4, 3, 2, 1].filter((c) => ranges[c]).map((c) => {
@@ -196,10 +213,12 @@ function legendHtml(view, outletsOn) {
   ];
   const what = category ? CATEGORIES[category].many : "cafes and QSRs";
   return `
-    <p class="legend-title">${what[0].toUpperCase() + what.slice(1)} per 10,000 residents</p>
-    <ul>${rows.join("")}</ul>
-    <label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
-      Show outlets</label>`;
+    <details ${open ? "open" : ""}>
+      <summary class="legend-title">${what[0].toUpperCase() + what.slice(1)} per 10,000 residents</summary>
+      <ul>${rows.join("")}</ul>
+      <label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
+        Show outlets</label>
+    </details>`;
 }
 
 function swatch(color) {

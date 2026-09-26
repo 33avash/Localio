@@ -116,4 +116,7 @@ function writeHash() {
   history.replaceState(null, "", hash || location.pathname);
 }
 
-if (data) render();
+if (data) {
+  map.fitData(data.localities);
+  render();
+}
