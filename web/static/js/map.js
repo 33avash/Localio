@@ -36,6 +36,8 @@ export function createMap(element, { cartoKey }) {
   // so nothing accumulates across steps.
   const outlets = L.layerGroup().addTo(map);
   const areas = L.layerGroup().addTo(map);
+  const picks = L.layerGroup().addTo(map);
+  let pickMarkers = [];
 
   const legend = L.control({ position: "bottomright" });
   legend.onAdd = () => L.DomUtil.create("div", "legend");
@@ -45,8 +47,11 @@ export function createMap(element, { cartoKey }) {
     map.closePopup();
     outlets.clearLayers();
     areas.clearLayers();
+    picks.clearLayers();
+    pickMarkers = [];
     if (view.step === 1) drawOutlets(view);
     else drawAreas(view);
+    if (view.step === 3) drawPicks(view);
     legend.getContainer().innerHTML = view.step === 1 ? outletLegend(view) : areaLegend(view);
   }
 
@@ -71,19 +76,21 @@ export function createMap(element, { cartoKey }) {
 
   // Steps 2-3: one bubble per locality, sized by how many of the chosen
   // format it has and coloured by saturation. Dashed means too few to score.
+  // In step 3 everything but the top 5 fades back.
   function drawAreas(view) {
-    const { localities, category, picks } = view;
+    const { localities, category } = view;
+    const shortlisted = view.step === 3;
     const bySize = [...localities].sort((a, b) => count(b, category) - count(a, category));
     for (const locality of bySize) {
-      const dimmed = picks.length > 0 && !picks.includes(locality);
+      if (view.picks.includes(locality)) continue;
       const color = SATURATION[locality.properties.categories[category].saturation];
       L.circleMarker(latLng(locality), {
         radius: 6 + Math.sqrt(count(locality, category)) * 4.5,
         color,
         weight: 1.5,
-        opacity: dimmed ? 0.2 : 1,
+        opacity: shortlisted ? 0.2 : 1,
         fillColor: color,
-        fillOpacity: dimmed ? 0.1 : 0.5,
+        fillOpacity: shortlisted ? 0.1 : 0.5,
         dashArray: locality.properties.status === "scored" ? null : "3 3",
       })
         .bindPopup(() => localityPopup(locality.properties, view), POPUP)
@@ -91,7 +98,29 @@ export function createMap(element, { cartoKey }) {
     }
   }
 
-  return { render };
+  // The top 5 are the one loud element on the map.
+  function drawPicks(view) {
+    pickMarkers = view.picks.map((locality, i) =>
+      L.marker(latLng(locality), {
+        icon: L.divIcon({ className: "pick-marker", html: num(i + 1), iconSize: [28, 28] }),
+        title: `${i + 1}. ${locality.properties.name}`,
+        zIndexOffset: 1000,
+      })
+        .bindPopup(() => localityPopup(locality.properties, view), POPUP)
+        .addTo(picks));
+  }
+
+  function focusPick(index) {
+    const marker = pickMarkers[index];
+    map.once("moveend", () => marker.openPopup());
+    map.flyTo(marker.getLatLng(), 14, { duration: 1.2 });
+  }
+
+  function resetView() {
+    map.setView(PUNE, 12);
+  }
+
+  return { render, focusPick, resetView };
 }
 
 const POPUP = { className: "localio-popup", minWidth: 230, maxWidth: 280 };
@@ -105,18 +134,20 @@ function outletLegend({ category }) {
   return `<p class="legend-title">Outlets</p><ul>${rows.join("")}</ul>`;
 }
 
-function areaLegend({ category, meta }) {
+function areaLegend({ category, meta, picks }) {
   const ranges = meta.saturation_ranges[category];
   const tiers = ["high", "medium", "low"].map((tier) => {
     const [low, high] = ranges[tier];
     return legendRow(swatch(SATURATION[tier]), tier[0].toUpperCase() + tier.slice(1), num(low === high ? low : `${low}–${high}`));
   });
   const rows = [
+    ...(picks.length ? [legendRow('<span class="swatch top-pick"></span>', "Your top 5")] : []),
     ...tiers,
     legendRow(swatch(SATURATION.none), "None", num(0)),
     legendRow('<span class="swatch dashed"></span>', `Under ${num(meta.min_pois_to_score)} outlets, not scored`),
   ];
-  return `<p class="legend-title">${CATEGORIES[category].many} per locality</p><ul>${rows.join("")}</ul>`;
+  const { many } = CATEGORIES[category];
+  return `<p class="legend-title">${many[0].toUpperCase() + many.slice(1)} per locality</p><ul>${rows.join("")}</ul>`;
 }
 
 function swatch(color) {

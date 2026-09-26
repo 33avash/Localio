@@ -27,12 +27,20 @@ const actions = {
   lens: (value) => { state.lens = value; },
   next: () => { state.step += 1; },
   back: () => { state.step -= 1; },
-  restart: () => { Object.assign(state, { step: 1, category: null, lens: null }); },
+  restart: () => {
+    Object.assign(state, { step: 1, category: null, lens: null });
+    map.resetView();
+  },
 };
 
 panel.addEventListener("click", (event) => {
   const control = event.target.closest("[data-action]");
   if (!control) return;
+  // A shortlist row only moves the map; re-rendering would close its popup.
+  if (control.dataset.action === "pick") {
+    map.focusPick(Number(control.dataset.value));
+    return;
+  }
   const previousStep = state.step;
   actions[control.dataset.action](control.dataset.value);
   render();

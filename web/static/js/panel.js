@@ -60,12 +60,12 @@ function chooseLens({ category, lens }) {
 function shortlist({ category, lens }, { meta, localities, ranking, averageRating }) {
   const c = CATEGORIES[category];
   const rows = ranking.slice(0, 5).map(({ feature, score }, i) => `
-    <li class="pick">
+    <li><button class="pick" data-action="pick" data-value="${i}">
       <span class="pick-rank num">${i + 1}</span>
       <span class="pick-name">${escapeHtml(feature.properties.name)}</span>
       <span class="pick-score num">${score.toFixed(1)}</span>
       <span class="pick-why">${rationale(feature.properties, category, lens, averageRating)}</span>
-    </li>`);
+    </button></li>`);
   const lensButtons = Object.entries(LENSES).map(([key, l]) =>
     `<button role="radio" aria-checked="${lens === key}" data-action="lens" data-value="${key}">${l.name}</button>`);
   const unscored = localities.length - ranking.length;

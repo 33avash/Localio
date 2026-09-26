@@ -294,9 +294,15 @@ h2:focus { outline: none; }
   row-gap: 2px;
   align-items: baseline;
   width: 100%;
-  padding: 14px 0;
+  padding: 14px 4px 14px 0;
+  text-align: left;
+  background: none;
+  border: 0;
   border-bottom: 1px solid var(--line);
+  cursor: pointer;
 }
+
+.pick:hover { background: #20242A; }
 
 .pick-rank {
   color: var(--accent);
@@ -361,6 +367,23 @@ h2:focus { outline: none; }
 }
 
 .swatch.dashed { border: 1.5px dashed var(--muted); }
+
+.swatch.top-pick {
+  background: var(--accent);
+  border-color: #FFFFFF;
+}
+
+.pick-marker {
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  font-weight: 500;
+}
 
 .localio-popup .leaflet-popup-content-wrapper,
 .localio-popup .leaflet-popup-tip {
