@@ -17,3 +17,6 @@ Thumbs.db
 output/*.geojson
 output/*.json
 output/*.tmp
+
+# Playwright run output (baselines under specs/ are committed)
+tests/e2e/test-results/

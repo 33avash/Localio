@@ -1,0 +1,13 @@
+{
+  "name": "localio-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end and visual tests for Localio, run against the Compose stack.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0"
+  }
+}
