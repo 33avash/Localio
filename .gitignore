@@ -15,4 +15,5 @@ Thumbs.db
 
 # Pipeline output is regenerated on every run
 output/*.geojson
+output/*.json
 output/*.tmp

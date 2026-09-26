@@ -86,7 +86,8 @@ function shortlist({ category, lens }, { meta, localities, ranking, averageRatin
       <span class="pick-rank num">${i + 1}</span>
       <span class="pick-name">${escapeHtml(feature.properties.name)}</span>
       <span class="pick-score num">${score.toFixed(1)}</span>
-      <span class="pick-why">${rationale(feature.properties, category, lens, averageRating)}</span>
+      <span class="pick-why">${rationale(feature.properties, category, lens,
+        { averageRating, cityPer10k: meta.city.per_10k[category] })}</span>
     </button></li>`);
   const lensButtons = Object.entries(LENSES).map(([key, l]) =>
     `<button role="radio" aria-checked="${lens === key}" data-action="lens" data-value="${key}">${l.name}</button>`);
@@ -98,9 +99,9 @@ function shortlist({ category, lens }, { meta, localities, ranking, averageRatin
       <div class="lens-switch" role="radiogroup" aria-label="Rank by">${lensButtons.join("")}</div>
       <div class="picks-head"><span>Locality</span><span>Score</span></div>
       <ol class="picks">${rows.join("")}</ol>
-      <p class="note">Scores compare the ${num(ranking.length)} localities with at least
-        ${num(meta.min_pois_to_score)} cafes and QSRs between them. The other ${num(unscored)} have too few
-        to score fairly.</p>`,
+      <p class="note">The list draws on the ${num(ranking.length)} localities with at least
+        ${num(meta.min_pois_to_score)} cafes and QSRs between them. The other ${num(unscored)} are scored too,
+        but they're hatched on the map and left off here, because so few outlets make their numbers shaky.</p>`,
     foot: `<button class="secondary" data-action="restart">Start over</button>`,
   };
 }
