@@ -7,6 +7,14 @@ const OSM_ATTRIBUTION =
 export const COLORS = {
   cafe: "#4F79A8",
   fast_food: "#8466B0",
+  other: "#6B6E73",
+};
+
+export const SATURATION = {
+  none: "#6B6E73",
+  low: "#A8C3B8",
+  medium: "#E0B15C",
+  high: "#C9604A",
 };
 
 export function createMap(element, { cartoKey }) {
@@ -22,20 +30,50 @@ export function createMap(element, { cartoKey }) {
   element.classList.toggle("basemap-osm", !cartoKey);
 
   // Markers only ever go into named groups, cleared on every render,
-  // so nothing accumulates when the view changes.
+  // so nothing accumulates across steps.
   const outlets = L.layerGroup().addTo(map);
+  const areas = L.layerGroup().addTo(map);
 
-  function render({ pois }) {
+  function render(view) {
     outlets.clearLayers();
-    for (const poi of pois) {
-      const color = COLORS[poi.properties.category];
+    areas.clearLayers();
+    if (view.step === 1) drawOutlets(view);
+    else drawAreas(view);
+  }
+
+  // Step 1: every POI. Once a format is picked, the other one fades to grey
+  // but stays visible, because where people already eat is the point.
+  function drawOutlets({ pois, category }) {
+    const ordered = [...pois].sort((a, b) => (a.properties.category === category) - (b.properties.category === category));
+    for (const poi of ordered) {
+      const faded = category && poi.properties.category !== category;
       L.circleMarker(latLng(poi), {
         radius: 4,
         color: "#FFFFFF",
         weight: 1,
-        fillColor: color,
-        fillOpacity: 0.75,
+        opacity: faded ? 0.15 : 1,
+        fillColor: faded ? COLORS.other : COLORS[poi.properties.category],
+        fillOpacity: faded ? 0.15 : 0.75,
       }).addTo(outlets);
+    }
+  }
+
+  // Steps 2-3: one bubble per locality, sized by how many of the chosen
+  // format it has and coloured by saturation. Dashed means too few to score.
+  function drawAreas({ localities, category, picks }) {
+    const bySize = [...localities].sort((a, b) => count(b, category) - count(a, category));
+    for (const locality of bySize) {
+      const dimmed = picks.length > 0 && !picks.includes(locality);
+      const color = SATURATION[locality.properties.categories[category].saturation];
+      L.circleMarker(latLng(locality), {
+        radius: 6 + Math.sqrt(count(locality, category)) * 4.5,
+        color,
+        weight: 1.5,
+        opacity: dimmed ? 0.2 : 1,
+        fillColor: color,
+        fillOpacity: dimmed ? 0.1 : 0.5,
+        dashArray: locality.properties.status === "scored" ? null : "3 3",
+      }).addTo(areas);
     }
   }
 
@@ -54,6 +92,10 @@ function basemap(cartoKey) {
     );
   }
   return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: OSM_ATTRIBUTION });
+}
+
+function count(locality, category) {
+  return locality.properties.categories[category].count;
 }
 
 function latLng(feature) {
