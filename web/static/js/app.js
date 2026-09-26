@@ -88,6 +88,12 @@ function render() {
     picks: ranking.slice(0, 5).map(({ feature }) => feature),
   });
   writeHash();
+  for (const row of regions.body.querySelectorAll("[data-action=pick]")) {
+    const index = Number(row.dataset.value);
+    for (const [type, on] of [["mouseenter", true], ["mouseleave", false], ["focus", true], ["blur", false]]) {
+      row.addEventListener(type, () => map.highlightPick(index, on));
+    }
+  }
 }
 
 // Re-rendering replaces the panel's buttons, so put keyboard focus back:

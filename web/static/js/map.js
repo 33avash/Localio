@@ -21,6 +21,9 @@ const ACCENT = "#3D8F7B";
 
 const POPUP = { className: "localio-popup", minWidth: 240, maxWidth: 290 };
 
+// Numbered markers closer than this on screen get pushed apart.
+const MIN_GAP_PX = 34;
+
 export function createMap(element, { cartoKey }) {
   const map = L.map(element, {
     center: PUNE,
@@ -51,6 +54,7 @@ export function createMap(element, { cartoKey }) {
   const hatching = L.layerGroup().addTo(map);
   const outlets = L.layerGroup().addTo(map);
   const picks = L.layerGroup().addTo(map);
+  const leaders = L.layerGroup().addTo(map);
   let pickMarkers = [];
   let lastView = null;
   let outletsChoice = null;
@@ -78,6 +82,7 @@ export function createMap(element, { cartoKey }) {
     areas.clearLayers();
     hatching.clearLayers();
     picks.clearLayers();
+    leaders.clearLayers();
     pickMarkers = [];
     drawAreas(view);
     drawOutlets(view);
@@ -144,16 +149,64 @@ export function createMap(element, { cartoKey }) {
     ensureHatchPattern(map);
   }
 
-  // The top 5 are the one loud element on the map.
+  // The top 5 are the one loud element on the map. Each sits on its
+  // catchment's label point, which is always inside the catchment.
   function drawPicks(view) {
-    pickMarkers = view.picks.map((locality, i) =>
-      L.marker(labelPoint(locality), {
-        icon: L.divIcon({ className: "pick-marker", html: num(i + 1), iconSize: [28, 28] }),
+    pickMarkers = view.picks.map((locality, i) => {
+      const marker = L.marker(labelPoint(locality), {
+        icon: L.divIcon({ className: "pick-marker", html: `<span class="pick-dot">${num(i + 1)}</span>`, iconSize: [28, 28] }),
         title: `${i + 1}. ${locality.properties.name}`,
         zIndexOffset: 1000,
       })
         .bindPopup(() => localityPopup(locality.properties, view), POPUP)
-        .addTo(picks));
+        .addTo(picks);
+      marker.anchor = marker.getLatLng();
+      return marker;
+    });
+    spreadPicks();
+  }
+
+  // Nearby picks (Deccan Gymkhana, Shivajinagar, Sadashiv Peth) would sit on
+  // top of each other when zoomed out. Push any pair closer than MIN_GAP_PX
+  // apart on screen and draw a thin line back to where each really is.
+  function spreadPicks() {
+    leaders.clearLayers();
+    if (!pickMarkers.length) return;
+    const points = pickMarkers.map((marker) => map.latLngToContainerPoint(marker.anchor));
+    for (let round = 0; round < 60; round += 1) {
+      let moved = false;
+      for (let i = 0; i < points.length; i += 1) {
+        for (let j = i + 1; j < points.length; j += 1) {
+          const gap = points[i].distanceTo(points[j]);
+          if (gap >= MIN_GAP_PX) continue;
+          const angle = gap > 0.1 ? Math.atan2(points[j].y - points[i].y, points[j].x - points[i].x) : (2 * Math.PI * j) / points.length;
+          const push = (MIN_GAP_PX - gap) / 2 + 0.5;
+          const step = L.point(Math.cos(angle) * push, Math.sin(angle) * push);
+          points[i] = points[i].subtract(step);
+          points[j] = points[j].add(step);
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    pickMarkers.forEach((marker, i) => {
+      const shown = map.containerPointToLatLng(points[i]);
+      marker.setLatLng(shown);
+      if (map.latLngToContainerPoint(marker.anchor).distanceTo(points[i]) < 2) return;
+      L.polyline([marker.anchor, shown], { color: "#1A1D21", weight: 1, opacity: 0.7, interactive: false }).addTo(leaders);
+      L.circleMarker(marker.anchor, { radius: 2, stroke: false, fillColor: "#1A1D21", fillOpacity: 0.8, interactive: false })
+        .addTo(leaders);
+    });
+  }
+  map.on("zoomend", spreadPicks);
+
+  // Hovering or focusing a shortlist row lifts its marker above the others
+  // and enlarges it, so the one being read is always findable.
+  function highlightPick(index, on) {
+    const marker = pickMarkers[index];
+    if (!marker) return;
+    marker.setZIndexOffset(on ? 2000 : 1000);
+    marker.getElement()?.classList.toggle("is-highlighted", on);
   }
 
   function focusPick(index) {
@@ -177,7 +230,7 @@ export function createMap(element, { cartoKey }) {
     map.fitBounds(dataBounds, { padding: [40, 40], maxZoom: 13 });
   }
 
-  return { render, fitData, focusPick, resetView };
+  return { render, fitData, focusPick, highlightPick, resetView };
 }
 
 function densityClass(locality, category) {
