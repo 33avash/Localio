@@ -56,7 +56,7 @@ def write_geojson(collection: dict, path: Path) -> None:
     """Write atomically and world-readable, so nginx never serves a half-written file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
+    with tmp.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(collection, f, ensure_ascii=False, indent=2)
     os.chmod(tmp, 0o644)
     os.replace(tmp, path)
