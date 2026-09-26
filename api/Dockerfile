@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/models')"
 
 COPY localio_api/ localio_api/
+COPY tests/ tests/
 
 # The pipeline's output is bind-mounted read-only at /srv/localio-data.
 EXPOSE 8000
