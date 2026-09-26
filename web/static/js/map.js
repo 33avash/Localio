@@ -32,6 +32,11 @@ export function createMap(element, { cartoKey }) {
   basemap(cartoKey).addTo(map);
   element.classList.toggle("basemap-osm", !cartoKey);
 
+  // Leaflet measures its container once. Any later size change (the mobile
+  // sheet opening or closing, crossing the breakpoint) needs a re-measure,
+  // or tiles stop short and clicks land in the wrong place.
+  new ResizeObserver(() => map.invalidateSize()).observe(element);
+
   // Markers only ever go into named groups, cleared on every render,
   // so nothing accumulates across steps.
   const outlets = L.layerGroup().addTo(map);

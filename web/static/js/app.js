@@ -4,6 +4,14 @@ import { renderPanel, STEPS } from "./panel.js";
 import { cityRating, LENSES, rank } from "./score.js";
 
 const panel = document.getElementById("panel-body");
+const sheetHandle = document.getElementById("sheet-handle");
+
+// On phones the panel is a bottom sheet that can shrink to its header.
+sheetHandle.addEventListener("click", () => {
+  const collapsed = document.body.classList.toggle("sheet-collapsed");
+  sheetHandle.setAttribute("aria-expanded", String(!collapsed));
+  sheetHandle.setAttribute("aria-label", collapsed ? "Show panel" : "Hide panel");
+});
 
 async function getJson(url) {
   const response = await fetch(url);

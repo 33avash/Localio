@@ -448,3 +448,91 @@ h2:focus { outline: none; }
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
+
+/* ---- Phones: map on top, panel as a bottom sheet ---- */
+
+.sheet-handle { display: none; }
+
+@media (max-width: 759px) {
+  :root { --sheet-peek: 72px; }
+
+  #map {
+    left: 0;
+    height: 55vh;
+    height: 55dvh;
+    transition: height 0.25s ease;
+  }
+
+  .panel {
+    top: auto;
+    width: 100%;
+    height: 45vh;
+    height: 45dvh;
+    border-top: 1px solid var(--line);
+    border-right: 0;
+    transition: height 0.25s ease;
+  }
+
+  .sheet-collapsed #map {
+    height: calc(100vh - var(--sheet-peek));
+    height: calc(100dvh - var(--sheet-peek));
+  }
+
+  .sheet-collapsed .panel { height: var(--sheet-peek); }
+
+  .sheet-handle {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 100%;
+    height: 20px;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .sheet-handle::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: #4A4F57;
+  }
+
+  .panel-head { padding: 0 16px 12px; }
+
+  .panel-body { padding: 16px 16px 24px; }
+
+  .progress { margin-bottom: 20px; }
+
+  .panel h2 { font-size: 20px; }
+
+  /* Rows flow inline so the legend doesn't cover a third of a small map. */
+  .legend {
+    max-width: 230px;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .legend ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 10px;
+  }
+
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .legend .swatch {
+    width: 10px;
+    height: 10px;
+  }
+}
