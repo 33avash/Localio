@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Unit and pipeline tests
+        run: docker compose run --rm data python -m pytest -q -p no:cacheprovider tests
+
       - name: Build, run the pipeline and start the site
         # web waits for data to exit 0, so this fails if any check fails.
         run: docker compose up --build --detach web
@@ -38,6 +41,7 @@ jobs:
             | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'localities'); assert n == 51"
           curl -fsS http://localhost:8080/data/pois.geojson \
             | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'outlets'); assert n == 259"
+          curl -fsS http://localhost:8080/data/model_report.json             | python3 -c "import json, sys; r = json.load(sys.stdin)['footfall']; print('demand from', r['demand_source'])"
           curl -fsS http://localhost:8080/config.json
 
       - name: Stop
