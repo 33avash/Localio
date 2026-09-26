@@ -1,7 +1,9 @@
 """Run the pipeline: python -m localio
 
-Reads LOCALIO_INPUT (default seed_data/pune_cafes_qsr.csv). Exits 1 with a
-message on stderr if the input is missing or any check fails.
+Reads LOCALIO_INPUT (default seed_data/pune_cafes_qsr.csv) and writes
+pois.geojson and localities.geojson to LOCALIO_OUTPUT (default output/).
+Exits 1 with a message on stderr if the input is missing or any check
+fails; nothing is written in that case.
 """
 
 import os
@@ -10,16 +12,19 @@ from pathlib import Path
 
 from localio.aggregate import aggregate
 from localio.clean import clean
+from localio.export import localities_collection, pois_collection, write_geojson
 from localio.load import InputError, load_table
 from localio.saturation import assign_tiers
 from localio.score import DEFAULT_WEIGHTS, score
 from localio.validate import Check, check_counts, check_scores
 
 DEFAULT_INPUT = "seed_data/pune_cafes_qsr.csv"
+DEFAULT_OUTPUT = "output"
 
 
 def main() -> int:
     input_path = Path(os.environ.get("LOCALIO_INPUT", DEFAULT_INPUT))
+    output_dir = Path(os.environ.get("LOCALIO_OUTPUT", DEFAULT_OUTPUT))
     print(f"localio: reading {input_path}")
     try:
         raw = load_table(input_path)
@@ -41,6 +46,14 @@ def main() -> int:
     if failed:
         return _fail(f"{len(failed)} check(s) failed; no output written")
 
+    outputs = {
+        "pois.geojson": pois_collection(pois),
+        "localities.geojson": localities_collection(scored, pois, DEFAULT_WEIGHTS),
+    }
+    for filename, collection in outputs.items():
+        path = output_dir / filename
+        write_geojson(collection, path)
+        _line("wrote", f"{path} ({len(collection['features'])} features)")
     return 0
 
 
