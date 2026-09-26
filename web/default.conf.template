@@ -5,7 +5,7 @@ server {
     index index.html;
 
     gzip on;
-    gzip_types application/geo+json application/javascript text/css;
+    gzip_types application/geo+json application/json application/javascript text/css;
 
     location / {
         try_files $uri $uri/ =404;
@@ -19,5 +19,13 @@ server {
         types {
             application/geo+json geojson;
         }
+    }
+
+    # Filled in from the environment when the container starts. An empty
+    # key makes the page fall back to OpenStreetMap tiles.
+    location = /config.json {
+        default_type application/json;
+        add_header Cache-Control "no-store";
+        return 200 '{"cartoKey": "${LOCALIO_CARTO_KEY}"}';
     }
 }
