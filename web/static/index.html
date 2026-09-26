@@ -11,15 +11,17 @@
 </head>
 <body>
   <aside class="panel" id="panel">
-    <button class="sheet-handle" id="sheet-handle" aria-expanded="true" aria-controls="panel-body"
-      aria-label="Hide panel"></button>
+    <button class="sheet-handle" id="sheet-handle" aria-expanded="false" aria-controls="panel"
+      aria-label="Expand panel"></button>
     <header class="panel-head">
       <p class="brand">Localio</p>
       <p class="tagline">Where to open a cafe or QSR in Pune</p>
+      <nav class="rail" id="panel-rail" aria-label="Steps"></nav>
     </header>
     <div class="panel-body" id="panel-body">
       <p class="status">Loading Pune's cafes and QSRs…</p>
     </div>
+    <footer class="panel-foot" id="panel-foot" hidden></footer>
   </aside>
   <main id="map" aria-label="Map of Pune"></main>
 

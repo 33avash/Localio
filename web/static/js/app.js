@@ -2,16 +2,16 @@ import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
 import { renderLoadError, renderPanel, STEPS } from "./panel.js";
 import { cityRating, LENSES, rank } from "./score.js";
+import { enableSheet } from "./sheet.js";
 
-const panel = document.getElementById("panel-body");
-const sheetHandle = document.getElementById("sheet-handle");
+const panel = document.getElementById("panel");
+const regions = {
+  rail: document.getElementById("panel-rail"),
+  body: document.getElementById("panel-body"),
+  foot: document.getElementById("panel-foot"),
+};
 
-// On phones the panel is a bottom sheet that can shrink to its header.
-sheetHandle.addEventListener("click", () => {
-  const collapsed = document.body.classList.toggle("sheet-collapsed");
-  sheetHandle.setAttribute("aria-expanded", String(!collapsed));
-  sheetHandle.setAttribute("aria-label", collapsed ? "Show panel" : "Hide panel");
-});
+enableSheet(panel, document.getElementById("sheet-handle"));
 
 async function getJson(url) {
   const response = await fetch(url).catch(() => {
@@ -36,7 +36,7 @@ async function loadData() {
     if (!pois.features?.length || !localities.features?.length) throw new Error("The GeoJSON files are empty.");
     return { pois: pois.features, localities: localities.features, meta: localities.meta };
   } catch (error) {
-    renderLoadError(panel, error.message);
+    renderLoadError(regions.body, error.message);
     return null;
   }
 }
@@ -49,7 +49,7 @@ const actions = {
   category: (value) => { state.category = value; },
   lens: (value) => { state.lens = value; },
   next: () => { state.step += 1; },
-  back: () => { state.step -= 1; },
+  goto: (value) => { state.step = Number(value); },
   restart: () => {
     Object.assign(state, { step: 1, category: null, lens: null });
     map.resetView();
@@ -72,7 +72,7 @@ panel.addEventListener("click", (event) => {
 
 function render() {
   const ranking = state.step === 3 ? rank(data.localities, state.category, state.lens) : [];
-  renderPanel(panel, state, {
+  renderPanel(regions, state, {
     meta: data.meta,
     localities: data.localities,
     ranking,

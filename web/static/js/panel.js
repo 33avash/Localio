@@ -5,8 +5,14 @@ export const STEPS = ["Format", "Priority", "Shortlist"];
 
 const VIEWS = { 1: chooseCategory, 2: chooseLens, 3: shortlist };
 
-export function renderPanel(element, state, data) {
-  element.innerHTML = progress(state.step) + VIEWS[state.step](state, data);
+// The panel has three fixed regions: the step rail in the header, one
+// scrolling body, and a footer that keeps the step's main action in view.
+export function renderPanel({ rail, body, foot }, state, data) {
+  const view = VIEWS[state.step](state, data);
+  rail.innerHTML = stepRail(state.step);
+  body.innerHTML = view.body;
+  foot.innerHTML = view.foot;
+  foot.hidden = !view.foot;
 }
 
 export function renderLoadError(element, detail) {
@@ -18,13 +24,17 @@ export function renderLoadError(element, detail) {
     </div>`;
 }
 
-function progress(current) {
+// Completed steps are buttons, so the rail doubles as the way back.
+function stepRail(current) {
   const items = STEPS.map((label, i) => {
     const step = i + 1;
-    if (step === current) return `<li class="current" aria-current="step">${label}</li>`;
-    return `<li class="${step < current ? "done" : ""}">${label}</li>`;
+    if (step === current) return `<li><span class="rail-step current" aria-current="step">${label}</span></li>`;
+    if (step < current) {
+      return `<li><button class="rail-step done" data-action="goto" data-value="${step}">${label}</button></li>`;
+    }
+    return `<li><span class="rail-step upcoming">${label}</span></li>`;
   });
-  return `<ol class="progress" aria-label="Step ${current} of ${STEPS.length}">${items.join("")}</ol>`;
+  return `<ol aria-label="Step ${current} of ${STEPS.length}">${items.join("")}</ol>`;
 }
 
 function chooseCategory({ category }, { meta }) {
@@ -39,12 +49,14 @@ function chooseCategory({ category }, { meta }) {
     ? `<p class="note">Grey dots are ${CATEGORIES[otherCategory(category)].many}. They aren't direct competitors,
        but they show where people already go to eat.</p>`
     : "";
-  return `
-    <h2 tabindex="-1">What are you opening?</h2>
-    <p class="lede">Pick a format to see where that kind of place already is.</p>
-    <div class="options" role="radiogroup" aria-label="Format">${rows.join("")}</div>
-    ${hint}
-    <button class="primary" data-action="next" ${category ? "" : "disabled"}>Continue</button>`;
+  return {
+    body: `
+      <h2 tabindex="-1">What are you opening?</h2>
+      <p class="lede">Pick a format to see where that kind of place already is.</p>
+      <div class="options" role="radiogroup" aria-label="Format">${rows.join("")}</div>
+      ${hint}`,
+    foot: `<button class="primary" data-action="next" ${category ? "" : "disabled"}>Continue</button>`,
+  };
 }
 
 function chooseLens({ category, lens }) {
@@ -57,13 +69,14 @@ function chooseLens({ category, lens }) {
     detail: l.describe(c),
     weights: l.weights,
   }));
-  return `
-    <button class="text-button back" data-action="back">Back</button>
-    <h2 tabindex="-1">What matters most?</h2>
-    <p class="lede">Each lens weighs footfall, competing ${c.many} and their ratings. They differ in how
-      much each one counts.</p>
-    <div class="options" role="radiogroup" aria-label="Priority">${rows.join("")}</div>
-    <button class="primary" data-action="next" ${lens ? "" : "disabled"}>Show my shortlist</button>`;
+  return {
+    body: `
+      <h2 tabindex="-1">What matters most?</h2>
+      <p class="lede">Each lens weighs footfall, competing ${c.many} and their ratings. They differ in how
+        much each one counts.</p>
+      <div class="options" role="radiogroup" aria-label="Priority">${rows.join("")}</div>`,
+    foot: `<button class="primary" data-action="next" ${lens ? "" : "disabled"}>Show my shortlist</button>`,
+  };
 }
 
 function shortlist({ category, lens }, { meta, localities, ranking, averageRating }) {
@@ -78,17 +91,18 @@ function shortlist({ category, lens }, { meta, localities, ranking, averageRatin
   const lensButtons = Object.entries(LENSES).map(([key, l]) =>
     `<button role="radio" aria-checked="${lens === key}" data-action="lens" data-value="${key}">${l.name}</button>`);
   const unscored = localities.length - ranking.length;
-  return `
-    <button class="text-button back" data-action="back">Back</button>
-    <h2 tabindex="-1">Your shortlist</h2>
-    <p class="lede">The five best localities for a new ${c.one}, ranked for ${LENSES[lens].name.toLowerCase()}.</p>
-    <div class="lens-switch" role="radiogroup" aria-label="Rank by">${lensButtons.join("")}</div>
-    <div class="picks-head"><span>Locality</span><span>Score</span></div>
-    <ol class="picks">${rows.join("")}</ol>
-    <p class="note">Scores compare the ${num(ranking.length)} localities with at least
-      ${num(meta.min_pois_to_score)} cafes and QSRs between them. The other ${num(unscored)} have too few
-      to score fairly.</p>
-    <button class="text-button" data-action="restart">Start over</button>`;
+  return {
+    body: `
+      <h2 tabindex="-1">Your shortlist</h2>
+      <p class="lede">The five best localities for a new ${c.one}, ranked for ${LENSES[lens].name.toLowerCase()}.</p>
+      <div class="lens-switch" role="radiogroup" aria-label="Rank by">${lensButtons.join("")}</div>
+      <div class="picks-head"><span>Locality</span><span>Score</span></div>
+      <ol class="picks">${rows.join("")}</ol>
+      <p class="note">Scores compare the ${num(ranking.length)} localities with at least
+        ${num(meta.min_pois_to_score)} cafes and QSRs between them. The other ${num(unscored)} have too few
+        to score fairly.</p>`,
+    foot: `<button class="secondary" data-action="restart">Start over</button>`,
+  };
 }
 
 function option({ action, value, selected, title, detail, weights }) {
