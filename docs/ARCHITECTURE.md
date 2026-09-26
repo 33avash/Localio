@@ -30,12 +30,19 @@ flowchart LR
         cfg["/config.json<br/>optional CARTO key"]
     end
 
+    subgraph api["api container · FastAPI · long-running"]
+        ask["/api/ask<br/>refuse, retrieve (fastembed),<br/>answer (Gemini or templates)"]
+    end
+
     csv --> load
     geo --> join
     check -- "all ok" --> pois & locs
     check -- "any fail: exit 1, write nothing" --> stop(["web never starts"])
     pois & locs -- "read-only mount, served at /data/" --> web
-    web --> browser(["browser: map + guided flow"])
+    locs -- "read-only mount" --> api
+    web -- "proxies /api/" --> api
+    api -. "optional, with a key" .-> gemini(["Gemini Flash"])
+    web --> browser(["browser: map, drawer, chat"])
     tiles(["basemap tiles<br/>OSM, or CARTO with a key"]) -.-> browser
 
     tool["catchments tool<br/>profile: tools, needs network"] -. "rebuilds when localities change" .-> geo
@@ -46,7 +53,8 @@ flowchart LR
 | Service | Image | Lifetime | Role |
 |---|---|---|---|
 | `data` | `python:3.11-slim` + pandas, openpyxl | runs once, exits 0 or 1 | Load, clean, aggregate, score, validate, write GeoJSON |
-| `web` | `nginx:alpine` | long-running, port `${LOCALIO_PORT:-8080}` | Serve `web/static/`, serve `./output` at `/data/`, serve `/config.json` |
+| `web` | `nginx:alpine` | long-running, port `${LOCALIO_PORT:-8080}` | Serve `web/static/`, serve `./output` at `/data/`, serve `/config.json`, proxy `/api/` |
+| `api` | `python:3.11-slim` + FastAPI, fastembed (model baked in) | long-running, healthcheck on `/api/health` | Answer chat questions from the locality facts |
 | `catchments` | `python:3.11-slim` + rasterio, shapely, pyproj | on demand, `tools` profile | Rebuild `seed_data/catchments.geojson` from HRSL population; needs network |
 
 ### How the pieces connect
@@ -55,20 +63,14 @@ flowchart LR
 - **Shared output is a bind mount.** `./output` is mounted into both containers, read-write for `data` and read-only for `web`. A named volume would keep the last run's files and the map could quietly show stale numbers. For the same reason nginx sends `/data/` with `Cache-Control: no-store`.
 - **Writes are atomic.** The pipeline writes each file to a `.tmp` sibling, sets it to 0644, then renames it, so nginx never serves a half-written file.
 - **Config without a rebuild.** nginx's entrypoint runs `envsubst` on its config template at startup, so `LOCALIO_CARTO_KEY` from `.env` reaches the page at `/config.json` without baking a key into an image.
+- **The chat can't take the map down.** nginx resolves `api` per request through Docker's DNS rather than at startup, so `web` starts and serves the map even if `api` is missing. The chat then shows "isn't reachable" within about 2 seconds.
 - **Offline by default.** Leaflet and the fonts are vendored, and the population data is precomputed and committed. The only runtime network use is basemap tiles, and the map works without them.
 
-## Planned for v2 (CA4)
+## Where the machine learning runs
 
-```mermaid
-flowchart LR
-    data["data container<br/>+ footfall model (scikit-learn)<br/>+ market archetypes (k-means)"] --> out["./output<br/>+ model_report.json"]
-    out --> web["web (nginx)<br/>reverse proxy /api/ → api"]
-    out --> api["api container · FastAPI<br/>/api/ask: retrieval (fastembed)<br/>+ Gemini Flash, or offline answers"]
-    web --> api
-    web --> browser(["browser: map, drawer, chat"])
-    test["test profile<br/>pytest + Playwright"] -.-> web & api
-```
+- **In `data`, once per build:** the footfall model (ridge regression, validated on held-out localities, gated against a baseline) and the market types (k-means). Their output ships in `localities.geojson`, and their evaluation in `model_report.json`.
+- **In `api`, per question:** embedding retrieval with `bge-small-en-v1.5` and the refusal check. Gemini Flash, if a key is set, only rewrites retrieved facts into sentences.
 
-- **Machine learning in the `data` stage.** A footfall model predicts how busy a new outlet would be in each locality. It is validated by leaving whole localities out and must beat a naive baseline before it's used. Clustering groups localities into market types.
-- **A third service, `api`,** answers questions about the localities. It retrieves facts with a small open embedding model and turns down off-topic questions. It writes answers with Gemini Flash when a key is set, and falls back to templated answers when not, so nothing requires a secret to run.
-- **One command to verify it all.** `make verify` rebuilds from scratch and runs the pipeline checks, pytest and Playwright end-to-end tests. GitHub Actions runs the same on every pull request.
+## Still to come
+
+- **One command to verify it all.** `make verify` rebuilds from scratch and runs the pipeline checks, both pytest suites, the chat evaluation and Playwright end-to-end tests. GitHub Actions already runs everything except Playwright on every pull request.
