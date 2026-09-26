@@ -28,7 +28,7 @@ from sklearn.model_selection import GroupKFold
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from localio.ml.features import FEATURES
+from localio.ml.features import FEATURES, PHRASES
 
 FOLDS = 5
 RANGE = (0.1, 0.9)
@@ -96,11 +96,26 @@ def contributions(model: Pipeline, features: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(z * ridge.coef_, columns=list(FEATURES), index=features.index)
 
 
-def drivers(row: pd.Series, count: int = 3) -> list[dict]:
-    """The place features that move this locality's prediction most, biggest first."""
+def drivers(row: pd.Series, coefficients: dict[str, float], count: int = 3) -> list[dict]:
+    """The place features that move this locality's prediction most, biggest first.
+
+    effect = coef * z, so the feature is above average when effect and coef
+    share a sign; that picks the phrase ("close to" or "far from" the centre).
+    """
     place = row.drop(labels=list(OUTLET_FEATURES))
     top = place.reindex(place.abs().sort_values(ascending=False).index).head(count)
-    return [{"feature": feature, "effect": round(float(effect), 3)} for feature, effect in top.items()]
+    return [
+        {
+            "feature": feature,
+            "effect": round(float(effect), 3),
+            "phrase": PHRASES[feature][0 if effect * coefficients[feature] > 0 else 1],
+        }
+        for feature, effect in top.items()
+    ]
+
+
+def coefficients(model: Pipeline) -> dict[str, float]:
+    return dict(zip(FEATURES, model.named_steps["ridgecv"].coef_))
 
 
 def effects(model: Pipeline) -> list[dict]:

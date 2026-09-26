@@ -54,3 +54,11 @@ def test_market_types_have_unique_names(pois, localities):
     assert len(names) == len(set(names)) == report["k"]
     assert labels.notna().all()
     assert all(len(similar) == archetypes.SIMILAR for similar in archetypes.similar(profile))
+
+
+def test_driver_phrase_follows_the_features_direction():
+    # Distance has a negative coefficient: a positive effect means the place is close in.
+    coefficients = {feature: 0.1 for feature in FEATURES} | {"km_from_centre": -0.1}
+    row = pd.Series({feature: 0.0 for feature in FEATURES} | {"km_from_centre": 0.3, "outlets_within_1km": -0.2})
+    drivers = footfall.drivers(row, coefficients, count=2)
+    assert [d["phrase"] for d in drivers] == ["being close to the city centre", "few cafes and QSRs within 1 km"]
