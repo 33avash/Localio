@@ -61,4 +61,14 @@ export function enableSheet(panel, handle) {
 
   // Leaving phone width drops the dragged height so the desktop layout applies.
   PHONE.addEventListener("change", () => document.documentElement.style.removeProperty("--sheet-height"));
+
+  // The detail drawer needs room, so opening it raises the sheet. Returns
+  // whether the sheet moved, so callers can wait for the map to resize.
+  return {
+    expand() {
+      if (!PHONE.matches || isOpen()) return false;
+      setHeight(innerHeight * OPEN);
+      return true;
+    },
+  };
 }

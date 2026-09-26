@@ -27,10 +27,11 @@ export function score(properties, category, weights) {
   return 100 * (weights.demand * demand_n - weights.supply * supply_n + weights.weakness * weakness_n);
 }
 
-export function rank(localities, category, lens) {
+// Low-confidence localities (fewer than 4 outlets) are left out unless asked for.
+export function rank(localities, category, lens, { includeLow = false } = {}) {
   const { weights } = LENSES[lens];
   return localities
-    .filter((feature) => feature.properties.status === "scored")
+    .filter((feature) => includeLow || feature.properties.status === "scored")
     .map((feature) => ({ feature, score: score(feature.properties, category, weights) }))
     .sort((a, b) => b.score - a.score || a.feature.properties.name.localeCompare(b.feature.properties.name));
 }

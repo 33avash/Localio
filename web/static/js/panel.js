@@ -79,31 +79,66 @@ function chooseLens({ category, lens }) {
   };
 }
 
-function shortlist({ category, lens }, { meta, localities, ranking, averageRating }) {
+// Each row carries a bar behind it, scaled to the top score, so the list
+// reads as a ranking rather than five unrelated numbers.
+function shortlist({ category, lens, filters }, { meta, localities, ranking, averageRating, empty }) {
   const c = CATEGORIES[category];
-  const rows = ranking.slice(0, 5).map(({ feature, score }, i) => `
-    <li><button class="pick" data-action="pick" data-value="${i}">
+  const top = ranking.slice(0, 5);
+  const best = Math.max(0.01, ...top.map((r) => r.score));
+  const rows = top.map(({ feature, score }, i) => `
+    <li><button class="pick" data-action="pick" data-value="${i}" data-name="${escapeHtml(feature.properties.name)}">
+      <span class="pick-bar" style="width:${barWidth(score, best)}%"></span>
       <span class="pick-rank num">${i + 1}</span>
-      <span class="pick-name">${escapeHtml(feature.properties.name)}</span>
-      <span class="pick-score num">${score.toFixed(1)}</span>
+      <span class="pick-name">${escapeHtml(feature.properties.name)}${feature.properties.status === "scored"
+        ? "" : ' <span class="low-flag">low confidence</span>'}</span>
+      <span class="pick-score num" data-score="${score}">${score.toFixed(1)}</span>
       <span class="pick-why">${rationale(feature.properties, category, lens,
         { averageRating, cityPer10k: meta.city.per_10k[category] })}</span>
     </button></li>`);
   const lensButtons = Object.entries(LENSES).map(([key, l]) =>
     `<button role="radio" aria-checked="${lens === key}" data-action="lens" data-value="${key}">${l.name}</button>`);
-  const unscored = localities.length - ranking.length;
+  const confident = localities.filter((f) => f.properties.status === "scored").length;
+  const list = top.length
+    ? `<div class="picks-head"><span>Locality</span><span>Score</span></div><ol class="picks">${rows.join("")}</ol>`
+    : emptyState(empty);
   return {
     body: `
       <h2 tabindex="-1">Your shortlist</h2>
       <p class="lede">The five best localities for a new ${c.one}, ranked for ${LENSES[lens].name.toLowerCase()}.</p>
       <div class="lens-switch" role="radiogroup" aria-label="Rank by">${lensButtons.join("")}</div>
-      <div class="picks-head"><span>Locality</span><span>Score</span></div>
-      <ol class="picks">${rows.join("")}</ol>
-      <p class="note">The list draws on the ${num(ranking.length)} localities with at least
-        ${num(meta.min_pois_to_score)} cafes and QSRs between them. The other ${num(unscored)} are scored too,
-        but they're hatched on the map and left off here, because so few outlets make their numbers shaky.</p>`,
+      ${filterControls(c, filters)}
+      ${list}
+      <p class="note">${num(confident)} localities have at least ${num(meta.min_pois_to_score)} cafes and QSRs
+        between them. The other ${num(localities.length - confident)} are scored too, but hatched on the map and
+        left off this list unless you include them, because so few outlets make their numbers shaky.</p>`,
     foot: `<button class="secondary" data-action="restart">Start over</button>`,
   };
+}
+
+export const MAX_OPTIONS = [null, 0, 1, 2, 3, 5];
+
+function filterControls(c, { maxCompetitors, includeLow }) {
+  const options = MAX_OPTIONS.map((value) => `<option value="${value ?? ""}" ${value === maxCompetitors ? "selected" : ""}>
+    ${value === null ? "any number of" : value}</option>`);
+  return `
+    <div class="filters">
+      <label class="filter">At most <select data-filter="max">${options.join("")}</select> ${c.many} already there</label>
+      <label class="filter"><input type="checkbox" data-filter="low" ${includeLow ? "checked" : ""}>
+        Include low-confidence areas</label>
+    </div>`;
+}
+
+// Says which filter emptied the list and offers the smallest change that
+// brings results back.
+function emptyState({ message, relax }) {
+  const button = relax
+    ? `<button class="secondary" data-action="relax" data-value="${relax.value}">${relax.label}</button>`
+    : "";
+  return `<div class="empty" role="status"><p>${message}</p>${button}</div>`;
+}
+
+function barWidth(score, best) {
+  return Math.max(0, (score / best) * 100).toFixed(1);
 }
 
 function option({ action, value, selected, title, detail, weights }) {
