@@ -49,6 +49,18 @@ def check_counts(pois: pd.DataFrame, localities: pd.DataFrame) -> list[Check]:
     ]
 
 
+def check_catchments(localities: pd.DataFrame) -> list[Check]:
+    """Every locality needs a catchment with people in it, or per-capita numbers break."""
+    matched = int(localities["area_km2"].notna().sum())
+    populated = int((localities["population"] > 0).sum())
+    people = localities["population"].sum()
+    return [
+        Check("catchments", matched, len(localities), shown=f"{matched} of {len(localities)} localities"),
+        Check("population", populated, len(localities), shown=f"{people / 1e6:.2f}M people, none empty"
+              if populated == len(localities) else f"{populated} of {len(localities)} localities have people"),
+    ]
+
+
 def check_scores(scored: pd.DataFrame) -> list[Check]:
     checks = [Check("scored", int(scored["scored"].sum()), EXPECTED["scored"], shown=_scored_note(scored))]
     for category in CATEGORIES:

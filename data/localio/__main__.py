@@ -1,6 +1,7 @@
 """Run the pipeline: python -m localio
 
-Reads LOCALIO_INPUT (default seed_data/pune_cafes_qsr.csv) and writes
+Reads LOCALIO_INPUT (default seed_data/pune_cafes_qsr.csv) and
+LOCALIO_CATCHMENTS (default seed_data/catchments.geojson), and writes
 pois.geojson and localities.geojson to LOCALIO_OUTPUT (default output/).
 Exits 1 with a message on stderr if the input is missing or any check
 fails; nothing is written in that case.
@@ -12,23 +13,27 @@ from pathlib import Path
 
 from localio.aggregate import aggregate
 from localio.clean import clean
+from localio.geo import CatchmentError, attach, load_catchments
 from localio.export import localities_collection, pois_collection, write_geojson
 from localio.load import InputError, load_table
 from localio.saturation import assign_tiers
 from localio.score import DEFAULT_WEIGHTS, score
-from localio.validate import Check, check_counts, check_scores
+from localio.validate import Check, check_catchments, check_counts, check_scores
 
 DEFAULT_INPUT = "seed_data/pune_cafes_qsr.csv"
+DEFAULT_CATCHMENTS = "seed_data/catchments.geojson"
 DEFAULT_OUTPUT = "output"
 
 
 def main() -> int:
     input_path = Path(os.environ.get("LOCALIO_INPUT", DEFAULT_INPUT))
+    catchments_path = Path(os.environ.get("LOCALIO_CATCHMENTS", DEFAULT_CATCHMENTS))
     output_dir = Path(os.environ.get("LOCALIO_OUTPUT", DEFAULT_OUTPUT))
     print(f"localio: reading {input_path}")
     try:
         raw = load_table(input_path)
-    except InputError as err:
+        catchments = load_catchments(catchments_path)
+    except (InputError, CatchmentError) as err:
         return _fail(str(err))
 
     pois, dropped = clean(raw)
@@ -36,10 +41,10 @@ def main() -> int:
     for reason, count in dropped.items():
         _line("dropped", f"{count}  ({reason})")
 
-    localities, _ = assign_tiers(aggregate(pois))
+    localities, _ = assign_tiers(attach(aggregate(pois), catchments))
     scored = score(localities, DEFAULT_WEIGHTS)
 
-    checks = check_counts(pois, localities) + check_scores(scored)
+    checks = check_counts(pois, localities) + check_catchments(localities) + check_scores(scored)
     for check in checks:
         _report(check)
     failed = [check for check in checks if not check.ok]
