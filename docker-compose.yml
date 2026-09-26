@@ -22,3 +22,12 @@ services:
     depends_on:
       data:
         condition: service_completed_successfully
+
+  # One-off, needs network: rebuilds seed_data/catchments.geojson.
+  # Run with: docker compose run --rm catchments
+  catchments:
+    build: ./tools/catchments
+    profiles: ["tools"]
+    volumes:
+      - ./data/localio:/app/localio:ro
+      - ./seed_data:/app/seed_data
