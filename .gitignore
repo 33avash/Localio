@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node (only used to vendor Leaflet and fonts)
+node_modules/
+
+# Local environment
+.env
+
+# OS clutter
+.DS_Store
+Thumbs.db
+
+# Pipeline output is regenerated on every run
+output/*.geojson
+output/*.tmp
