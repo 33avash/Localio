@@ -1,16 +1,19 @@
+import { CATEGORIES, num } from "./format.js";
+import { localityPopup, outletPopup } from "./popups.js";
+
 const PUNE = [18.5204, 73.8567];
 const PUNE_BOUNDS = [[18.40, 73.65], [18.68, 73.98]];
 
 const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-export const COLORS = {
+const COLORS = {
   cafe: "#4F79A8",
   fast_food: "#8466B0",
   other: "#6B6E73",
 };
 
-export const SATURATION = {
+const SATURATION = {
   none: "#6B6E73",
   low: "#A8C3B8",
   medium: "#E0B15C",
@@ -34,11 +37,17 @@ export function createMap(element, { cartoKey }) {
   const outlets = L.layerGroup().addTo(map);
   const areas = L.layerGroup().addTo(map);
 
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => L.DomUtil.create("div", "legend");
+  legend.addTo(map);
+
   function render(view) {
+    map.closePopup();
     outlets.clearLayers();
     areas.clearLayers();
     if (view.step === 1) drawOutlets(view);
     else drawAreas(view);
+    legend.getContainer().innerHTML = view.step === 1 ? outletLegend(view) : areaLegend(view);
   }
 
   // Step 1: every POI. Once a format is picked, the other one fades to grey
@@ -54,13 +63,16 @@ export function createMap(element, { cartoKey }) {
         opacity: faded ? 0.15 : 1,
         fillColor: faded ? COLORS.other : COLORS[poi.properties.category],
         fillOpacity: faded ? 0.15 : 0.75,
-      }).addTo(outlets);
+      })
+        .bindPopup(() => outletPopup(poi.properties), POPUP)
+        .addTo(outlets);
     }
   }
 
   // Steps 2-3: one bubble per locality, sized by how many of the chosen
   // format it has and coloured by saturation. Dashed means too few to score.
-  function drawAreas({ localities, category, picks }) {
+  function drawAreas(view) {
+    const { localities, category, picks } = view;
     const bySize = [...localities].sort((a, b) => count(b, category) - count(a, category));
     for (const locality of bySize) {
       const dimmed = picks.length > 0 && !picks.includes(locality);
@@ -73,11 +85,46 @@ export function createMap(element, { cartoKey }) {
         fillColor: color,
         fillOpacity: dimmed ? 0.1 : 0.5,
         dashArray: locality.properties.status === "scored" ? null : "3 3",
-      }).addTo(areas);
+      })
+        .bindPopup(() => localityPopup(locality.properties, view), POPUP)
+        .addTo(areas);
     }
   }
 
   return { render };
+}
+
+const POPUP = { className: "localio-popup", minWidth: 230, maxWidth: 280 };
+
+function outletLegend({ category }) {
+  const rows = Object.keys(CATEGORIES).map((key) => {
+    const faded = category && key !== category;
+    return legendRow(`<span class="swatch dot" style="background:${faded ? COLORS.other : COLORS[key]}"></span>`,
+      CATEGORIES[key].label);
+  });
+  return `<p class="legend-title">Outlets</p><ul>${rows.join("")}</ul>`;
+}
+
+function areaLegend({ category, meta }) {
+  const ranges = meta.saturation_ranges[category];
+  const tiers = ["high", "medium", "low"].map((tier) => {
+    const [low, high] = ranges[tier];
+    return legendRow(swatch(SATURATION[tier]), tier[0].toUpperCase() + tier.slice(1), num(low === high ? low : `${low}–${high}`));
+  });
+  const rows = [
+    ...tiers,
+    legendRow(swatch(SATURATION.none), "None", num(0)),
+    legendRow('<span class="swatch dashed"></span>', `Under ${num(meta.min_pois_to_score)} outlets, not scored`),
+  ];
+  return `<p class="legend-title">${CATEGORIES[category].many} per locality</p><ul>${rows.join("")}</ul>`;
+}
+
+function swatch(color) {
+  return `<span class="swatch" style="background:${color}80; border-color:${color}"></span>`;
+}
+
+function legendRow(mark, label, value = "") {
+  return `<li>${mark}<span>${label}</span><span class="legend-value">${value}</span></li>`;
 }
 
 // CARTO Positron is muted enough for the data to read clearly, but since

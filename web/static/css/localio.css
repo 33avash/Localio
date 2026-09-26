@@ -312,3 +312,116 @@ h2:focus { outline: none; }
   line-height: 1.45;
 }
 
+
+/* ---- Legend and popups: same dark ground as the panel, no shadows ---- */
+
+.legend {
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font: 400 12px/1.4 var(--sans);
+}
+
+.legend-title {
+  margin: 0 0 6px;
+  font-weight: 500;
+}
+
+.legend ul {
+  display: grid;
+  grid-template-columns: 14px auto auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li { display: contents; }
+
+.legend-value {
+  color: var(--muted);
+  text-align: right;
+}
+
+.swatch {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+}
+
+.swatch.dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 2px;
+  border: 1px solid #FFFFFF;
+}
+
+.swatch.dashed { border: 1.5px dashed var(--muted); }
+
+.localio-popup .leaflet-popup-content-wrapper,
+.localio-popup .leaflet-popup-tip {
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.localio-popup .leaflet-popup-content {
+  margin: 14px 16px;
+  font: 400 13px/1.45 var(--sans);
+}
+
+.localio-popup a.leaflet-popup-close-button { color: var(--muted); }
+.localio-popup a.leaflet-popup-close-button:hover { color: var(--text); }
+
+.localio-popup h3 {
+  margin: 0 16px 2px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.localio-popup p { margin: 0; }
+
+.localio-popup .popup-sub {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.localio-popup table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.localio-popup th,
+.localio-popup td {
+  padding: 3px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  padding-left: 14px;
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.localio-popup th[scope="row"] {
+  padding-left: 0;
+  text-align: left;
+}
+
+.localio-popup thead td,
+.localio-popup thead th { border-top: 0; }
+
+.localio-popup .chosen {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.localio-popup .popup-score {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}

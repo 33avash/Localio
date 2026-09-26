@@ -50,6 +50,8 @@ function render() {
   map.render({
     step: state.step,
     category: state.category,
+    lens: state.lens,
+    meta: localities.meta,
     pois: pois.features,
     localities: localities.features,
     picks: ranking.slice(0, 5).map(({ feature }) => feature),
