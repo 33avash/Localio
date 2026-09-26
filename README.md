@@ -79,13 +79,13 @@ The front end is plain ES modules with no build step. Leaflet 1.9.4 and the IBM 
 
 ## The opportunity score
 
-Every scored locality gets one score for cafes and another for QSRs. Higher means a better place to open. With the default weights, cafe scores run from -16 to 40 and QSR scores from -3 to 32. The score combines three things:
+Every locality gets one score for cafes and another for QSRs. Higher means a better place to open. With the default weights, cafe scores run from -16 to 43 and QSR scores from -15 to 36. The score combines three things:
 
-- **Demand**: how busy the area is for food and drink overall. We use the total number of Google reviews across every cafe and QSR in the locality as a stand-in for footfall.
-- **Supply**: how many places of *your* category are already there. More competitors pull the score down.
-- **Weakness**: how beatable those competitors are. It's 5 minus their average rating, so a strip of 3.8-star cafes scores higher than a strip of 4.7-star ones. If there are no rated competitors, we use a neutral 0.5.
+- **Demand**: how busy a new outlet of your format would be here, as predicted by the footfall model below.
+- **Supply**: how many places of *your* format are already there **per 10,000 residents**. More competitors per head pull the score down.
+- **Weakness**: how beatable those competitors are. It's 5 minus their average rating, so a strip of 3.8-star cafes scores higher than a strip of 4.7-star ones. If there are no rated competitors, it's a neutral 0.5.
 
-Each of the three is scaled to 0–1 across the scored localities, then combined:
+Each of the three is scaled to 0–1 across all 51 localities, then combined:
 
 ```
 score = 100 × (0.45 × demand − 0.40 × supply + 0.15 × weakness)
@@ -93,9 +93,33 @@ score = 100 × (0.45 × demand − 0.40 × supply + 0.15 × weakness)
 
 The map lets you swap those weights for one of three lenses (low competition, proven footfall, weak incumbents). The browser re-ranks instantly because the pipeline ships the scaled components, not just the final score.
 
-Only localities with at least 4 cafes and QSRs combined are scored. Below that, one extra outlet swings the numbers too much to mean anything. Those localities still appear on the map, marked as not enough data.
+Localities with fewer than 4 cafes and QSRs are scored too, but flagged low-confidence. They're hatched on the map and left off the shortlist, because their numbers rest on one or two outlets.
 
 The map shades each catchment by **outlets per 10,000 residents** rather than raw counts, because 8 cafes among 300,000 people is a thinner market than 5 among 20,000. Non-zero values fall into five quantile classes, worked out separately for cafes, QSRs and both together. Zero gets its own grey class: "none yet" is an answer, not the bottom of a scale.
+
+## Machine learning, and what it's used for
+
+The pipeline trains three things with scikit-learn. Each answers a question the hand-weighted score can't, and each is checked before it's used. The Method view in the app shows the same numbers.
+
+**1. Footfall model: "how busy would my new outlet be here?"** Google gives no visit counts, so each outlet's review count stands in for footfall, and the model predicts `log(1 + reviews)`. Its inputs are the outlet's type (format, chain, price level, hours, late-night) and its surroundings: distance from the centre, residents per km², cafes and QSRs within 500 m and 1 km, and how reviewed those neighbours are. None of these counts the outlet itself.
+
+It's validated by holding out whole localities, five folds of `GroupKFold`, so every error is measured on places the model has never seen. A random split would leak neighbourhood context and flatter it.
+
+| Model | Mean abs. error (log reviews) | R² | Rank correlation |
+|---|---|---|---|
+| Median baseline | 1.300 | −0.01 | −0.10 |
+| **Ridge regression** | **1.211** | **0.12** | **0.36** |
+| Gradient boosting | 1.245 | 0.00 | 0.34 |
+
+Ridge is used because it beats the baseline, and only because it does: if it didn't, the pipeline would fall back to observed reviews and say so in its log. Gradient boosting, the obvious upgrade, does worse with 259 outlets. The signal is real but modest, so the app always shows the model's 80% range next to its estimate, and that range is wide.
+
+For each locality the model is asked about a standard new independent outlet (price level 2, 13 hours a day, not open late) of each format. That prediction becomes the demand term. Because Ridge is linear, each prediction splits exactly into what each feature added, and the three biggest place-related parts become the "what drives this" line in the app. The strongest effects are the number of cafes and QSRs within 1 km (+0.25 log reviews per standard deviation) and how reviewed nearby outlets are (+0.17).
+
+**2. Market types: "what kind of market is this, and where else is like it?"** k-means groups the 51 localities by outlets per head, chain share, price, late-night share, rating, predicted demand and cafe share. k runs from 3 to 6 and is chosen by silhouette score; that gives 5 types, but a silhouette of 0.24 means the groups overlap a lot. They describe the city, they don't predict anything. Each locality also lists the three localities with the most similar profile.
+
+**3. Retrieval for the chat (planned).** A small open embedding model will match questions to locality facts and turn away questions that aren't about opening a cafe or QSR in Pune.
+
+Menu types (coffee, chai, burgers and so on) are tagged by rules, not a model: a table for 36 of the 37 chain brands (Platesman is left to the name rules rather than guessed) and keywords in outlet names. 2.7% of outlets end up as "Other".
 
 ### Why localities, not grid cells
 
@@ -107,7 +131,7 @@ Deccan Gymkhana has 121,097 reviews across its outlets. The next highest, Korega
 
 ### Checking the numbers
 
-A wrong aggregation still draws a map that looks perfectly fine. So the pipeline checks its own output against known figures before writing anything: 259 POIs, 51 localities, 165 cafes and 94 QSRs, a catchment with people in it for every locality, 23 scored localities, and the top three for each category. If any check fails it exits with an error and writes nothing. The expected values live in [data/localio/validate.py](data/localio/validate.py); update them if you swap in a different dataset.
+A wrong aggregation still draws a map that looks perfectly fine. So the pipeline checks its own output against known figures before writing anything: 259 POIs, 51 localities, 165 cafes and 94 QSRs, a catchment with people in it for every locality, and the top three for each category under the original v1 score (kept only for this check). Then it checks the v2 output: every score a real number within ±100, the low-confidence count printed, menu "Other" under 8%, and no recommendation sentence with an unfilled slot. If any check fails it exits with an error and writes nothing. `docker compose run --rm data python -m pytest tests` runs the unit tests. The expected values live in [data/localio/validate.py](data/localio/validate.py); update them if you swap in a different dataset.
 
 ## Data
 

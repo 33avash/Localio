@@ -36,8 +36,24 @@ A running log of the choices behind Localio and why they were made. Newest last.
 
 **Push numbered markers apart on screen.** Three of the top cafe localities sit within a few hundred metres of each other. A collision pass keeps markers at least 34 px apart at any zoom, with a leader line to each true position.
 
-## Planned (v2)
+## Machine learning
 
-**Validate the footfall model by locality, not by row.** Outlets in the same locality share context, so a random split would leak it and flatter the model. Grouped cross-validation leaves whole localities out. The model only replaces the heuristic demand term if it beats a naive baseline on that test.
+**Validate the footfall model by locality, not by row.** (2026-09-26) Outlets in the same locality share context, so a random split would leak it and flatter the model. Five-fold `GroupKFold` leaves whole localities out. The model only replaces the heuristic demand term if it beats a median baseline on that test. It does, modestly: MAE 1.21 against 1.30 log reviews, R² 0.12.
+
+**Ridge, not gradient boosting.** Gradient boosting was the obvious upgrade and did worse (R² 0.00) with 259 outlets. Ridge is also exactly decomposable, so each locality's "what drives this" is the model's real arithmetic, not an approximation.
+
+**Show the model's range, not just its estimate.** With R² 0.12 a single number would overstate what the model knows. The app shows the 80% range from cross-validated errors next to every estimate.
+
+**Supply per 10,000 residents in the score.** v1 counted competitors. With population available, counts favour big catchments, so v2 divides by residents. The shortlist's "thin" and "heavy" wording compares against the city median, the same test the recommendation sentence uses, so the two never disagree.
+
+**Score every locality, but keep low-confidence ones off the shortlist.** The model can estimate demand anywhere, so the 28 small localities now have scores. They stay hatched and off the top 5 because their supply and ratings rest on one to three outlets.
+
+**Keep v1's score as a check.** Its top 3 are known values, so recomputing it catches aggregation mistakes before any modelling happens. It isn't shown anywhere.
+
+**Market types are descriptive.** k-means picks 5 types, but a silhouette of 0.24 means they overlap. The app uses them as a label and for "similar localities", never as an input to the score.
+
+**Menu types by rules.** The seed has no cuisine field. A brand table plus name keywords is transparent and testable. A model trained on 259 names, with no labels to check it against, wouldn't be.
+
+## Planned
 
 **Chat works without a key.** Gemini Flash writes answers when `GEMINI_API_KEY` is set. Otherwise the API returns templated answers from the same retrieved facts, so tests, CI and a fresh clone don't need a secret.
