@@ -58,7 +58,9 @@ The panel walks you through three steps, and the map follows along.
 
 1. **What are you opening?** Pick cafe or QSR. The map shows every outlet of that kind, with the other kind in grey so you can see where people already go to eat.
 2. **What matters most?** Pick a lens: low competition, proven footfall or weak incumbents. The map shades each locality's catchment by how many of your format there are per 10,000 residents. Hatched areas have too few outlets to score.
-3. **Your shortlist.** The top five localities for that lens, each with a score and a one-line reason built from its numbers. Click a row to fly to it; hover one to find its marker. You can switch lenses here and the list re-ranks on the spot.
+3. **Your shortlist.** The top five localities for that lens, each with a score, a bar to compare it against the leader, and a one-line reason built from its numbers. Switch lenses and the scores count to their new values. Filters cap how many competitors you'll accept, or bring in the low-confidence areas.
+
+Click any area, numbered marker or shortlist row to open its **detail drawer**. It has residents and residents per outlet against the city median, both formats side by side, the menu mix, chains against independents, the late-night share, and the footfall model's estimate with its range and what drives it. It ends with a one-sentence recommendation. **How it works**, at the top of the panel, shows what each model does and how it was checked.
 
 Completed steps in the rail at the top of the panel take you back. On a phone the panel is a sheet under the map; drag its handle to resize it.
 
