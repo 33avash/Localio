@@ -52,6 +52,28 @@ Everything works without any keys. Two are optional, set in `.env` (copy `.env.e
 
 After changing `.env`, run `docker compose up -d web api`.
 
+## Check it works
+
+```
+make verify          # or, without make: bash scripts/verify.sh
+```
+
+It tears everything down and rebuilds from scratch, then waits for the health checks. It runs the pipeline's own checks, both pytest suites, the chat evaluation, and the Playwright end-to-end and visual tests in their official container. A run on 26 September 2026:
+
+```
+localio verify
+  ok    clean start                        1s
+  ok    build, pipeline, health checks     10s
+  ok    pipeline checks                    0s
+  ok    pipeline unit tests                4s
+  ok    api unit tests                     8s
+  ok    chat evaluation                    5s
+  ok    end-to-end and visual tests        36s
+all checks passed
+```
+
+The Playwright tests check the whole flow: tiles or the fallback notice; outlet dots; Cafe → Continue; a different leader per lens; exactly five markers with none within 30px; a shortlist row opening the drawer; the chat citing a locality it names; "who won the world cup" refused; keyboard-only navigation; and 4.5:1 contrast. The visual tests compare every step at 1440, 1024 and 390px against committed baselines. Narrowing the panel by 32px fails 8 of the 12, which is the point. GitHub Actions runs the same checks on every pull request. [docs/QA.md](docs/QA.md) lists what still needs a person and a real browser before a demo.
+
 ## Using it
 
 The panel walks you through three steps, and the map follows along.
