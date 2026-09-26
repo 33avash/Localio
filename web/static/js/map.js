@@ -13,12 +13,13 @@ const COLORS = {
   other: "#6B6E73",
 };
 
-const SATURATION = {
-  none: "#6B6E73",
-  low: "#A8C3B8",
-  medium: "#E0B15C",
-  high: "#C9604A",
-};
+// Outlets per 10,000 residents, five quantile classes in a warm ramp kept
+// well away from the teal accent, so "crowded" never reads as "recommended".
+// Class 0 (none yet) is a neutral grey rather than the bottom of the ramp.
+const DENSITY = ["#D6D4CF", "#F6E4C1", "#EDC486", "#E09A55", "#C66A34", "#8F4322"];
+const ACCENT = "#3D8F7B";
+
+const POPUP = { className: "localio-popup", minWidth: 240, maxWidth: 290 };
 
 export function createMap(element, { cartoKey }) {
   const map = L.map(element, {
@@ -33,41 +34,68 @@ export function createMap(element, { cartoKey }) {
   element.classList.toggle("basemap-osm", !cartoKey);
   watchTiles(map, tiles, element);
 
-  // Leaflet measures its container once. Any later size change (the mobile
-  // sheet opening or closing, crossing the breakpoint) needs a re-measure,
-  // or tiles stop short and clicks land in the wrong place.
+  // Leaflet measures its container once. Any later size change (the phone
+  // sheet moving, crossing the breakpoint) needs a re-measure, or tiles stop
+  // short and clicks land in the wrong place.
   new ResizeObserver(() => map.invalidateSize()).observe(element);
+
+  // Outlet dots get their own pane above the areas, so a hovered area
+  // brought to the front never covers them.
+  map.createPane("outlets").style.zIndex = 450;
 
   // Markers only ever go into named groups, cleared on every render,
   // so nothing accumulates across steps.
-  const outlets = L.layerGroup().addTo(map);
   const areas = L.layerGroup().addTo(map);
+  const hatching = L.layerGroup().addTo(map);
+  const outlets = L.layerGroup().addTo(map);
   const picks = L.layerGroup().addTo(map);
   let pickMarkers = [];
+  let lastView = null;
+  let outletsChoice = null;
 
   const legend = L.control({ position: "bottomright" });
-  legend.onAdd = () => L.DomUtil.create("div", "legend");
+  legend.onAdd = () => {
+    const div = L.DomUtil.create("div", "legend");
+    L.DomEvent.disableClickPropagation(div);
+    div.addEventListener("change", (event) => {
+      if (!event.target.matches("[data-toggle=outlets]")) return;
+      outletsChoice = event.target.checked;
+      drawOutlets(lastView);
+    });
+    return div;
+  };
   legend.addTo(map);
 
   function render(view) {
+    lastView = view;
     map.closePopup();
-    outlets.clearLayers();
     areas.clearLayers();
+    hatching.clearLayers();
     picks.clearLayers();
     pickMarkers = [];
-    if (view.step === 1) drawOutlets(view);
-    else drawAreas(view);
+    drawAreas(view);
+    drawOutlets(view);
     if (view.step === 3) drawPicks(view);
-    legend.getContainer().innerHTML = view.step === 1 ? outletLegend(view) : areaLegend(view);
+    legend.getContainer().innerHTML = legendHtml(view, showOutlets(view));
   }
 
-  // Step 1: every POI. Once a format is picked, the other one fades to grey
-  // but stays visible, because where people already eat is the point.
-  function drawOutlets({ pois, category }) {
+  // Dots are on by default while choosing a format and off after that,
+  // unless the legend checkbox says otherwise.
+  function showOutlets(view) {
+    return outletsChoice ?? view.step === 1;
+  }
+
+  // Once a format is picked, the other one fades to grey but stays visible,
+  // because where people already eat is the point.
+  function drawOutlets(view) {
+    outlets.clearLayers();
+    if (!showOutlets(view)) return;
+    const { pois, category } = view;
     const ordered = [...pois].sort((a, b) => (a.properties.category === category) - (b.properties.category === category));
     for (const poi of ordered) {
       const faded = category && poi.properties.category !== category;
       L.circleMarker(latLng(poi), {
+        pane: "outlets",
         radius: 4,
         color: "#FFFFFF",
         weight: 1,
@@ -80,34 +108,40 @@ export function createMap(element, { cartoKey }) {
     }
   }
 
-  // Steps 2-3: one bubble per locality, sized by how many of the chosen
-  // format it has and coloured by saturation. Dashed means too few to score.
-  // In step 3 everything but the top 5 fades back.
+  // One filled catchment per locality. The areas tile rather than overlap,
+  // so every colour on the map is a colour in the legend. Localities with
+  // too few outlets to score get a hatch on top.
   function drawAreas(view) {
-    const { localities, category } = view;
     const shortlisted = view.step === 3;
-    const bySize = [...localities].sort((a, b) => count(b, category) - count(a, category));
-    for (const locality of bySize) {
-      if (view.picks.includes(locality)) continue;
-      const color = SATURATION[locality.properties.categories[category].saturation];
-      L.circleMarker(latLng(locality), {
-        radius: 6 + Math.sqrt(count(locality, category)) * 4.5,
-        color,
-        weight: 1.5,
-        opacity: shortlisted ? 0.2 : 1,
-        fillColor: color,
-        fillOpacity: shortlisted ? 0.1 : 0.5,
-        dashArray: locality.properties.status === "scored" ? null : "3 3",
-      })
-        .bindPopup(() => localityPopup(locality.properties, view), POPUP)
-        .addTo(areas);
+    for (const locality of view.localities) {
+      const dimmed = shortlisted && !view.picks.includes(locality);
+      const area = L.geoJSON(locality, {
+        style: {
+          color: "#FFFFFF",
+          opacity: 0.25,
+          weight: 0.5,
+          fillColor: DENSITY[densityClass(locality, view.category)],
+          fillOpacity: dimmed ? 0.2 : 0.7,
+        },
+      });
+      area.eachLayer((layer) => {
+        layer.bindPopup(() => localityPopup(locality.properties, view), POPUP);
+        layer.on("mouseover", () => layer.setStyle({ color: ACCENT, opacity: 1, weight: 2 }).bringToFront());
+        layer.on("mouseout", () => area.resetStyle(layer));
+      });
+      area.addTo(areas);
+      if (locality.properties.status !== "scored") {
+        L.geoJSON(locality, { interactive: false, style: { stroke: false, fillColor: "url(#hatch)", fillOpacity: 1 } })
+          .addTo(hatching);
+      }
     }
+    ensureHatchPattern(map);
   }
 
   // The top 5 are the one loud element on the map.
   function drawPicks(view) {
     pickMarkers = view.picks.map((locality, i) =>
-      L.marker(latLng(locality), {
+      L.marker(labelPoint(locality), {
         icon: L.divIcon({ className: "pick-marker", html: num(i + 1), iconSize: [28, 28] }),
         title: `${i + 1}. ${locality.properties.name}`,
         zIndexOffset: 1000,
@@ -129,39 +163,51 @@ export function createMap(element, { cartoKey }) {
   return { render, focusPick, resetView };
 }
 
-const POPUP = { className: "localio-popup", minWidth: 230, maxWidth: 280 };
-
-function outletLegend({ category }) {
-  const rows = Object.keys(CATEGORIES).map((key) => {
-    const faded = category && key !== category;
-    return legendRow(`<span class="swatch dot" style="background:${faded ? COLORS.other : COLORS[key]}"></span>`,
-      CATEGORIES[key].label);
-  });
-  return `<p class="legend-title">Outlets</p><ul>${rows.join("")}</ul>`;
+function densityClass(locality, category) {
+  const { properties } = locality;
+  return category ? properties.categories[category].density_class : properties.total_density_class;
 }
 
-function areaLegend({ category, meta, picks }) {
-  const ranges = meta.saturation_ranges[category];
-  const tiers = ["high", "medium", "low"].map((tier) => {
-    const [low, high] = ranges[tier];
-    return legendRow(swatch(SATURATION[tier]), tier[0].toUpperCase() + tier.slice(1), num(low === high ? low : `${low}–${high}`));
+// Leaflet draws every vector layer into one SVG, so the hatch pattern is
+// defined once in that SVG and referenced as a fill.
+function ensureHatchPattern(map) {
+  const svg = map.getPanes().overlayPane.querySelector("svg");
+  if (!svg || svg.querySelector("#hatch")) return;
+  svg.insertAdjacentHTML("afterbegin", `
+    <defs>
+      <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#4A4F57" stroke-width="1.2" stroke-opacity="0.55"></line>
+      </pattern>
+    </defs>`);
+}
+
+function legendHtml(view, outletsOn) {
+  const { category, meta, picks } = view;
+  const ranges = meta.density_ranges[category ?? "total"];
+  const classes = [5, 4, 3, 2, 1].filter((c) => ranges[c]).map((c) => {
+    const [low, high] = ranges[c];
+    return legendRow(swatch(DENSITY[c]), num(low === high ? low : `${low}–${high}`));
   });
   const rows = [
     ...(picks.length ? [legendRow('<span class="swatch top-pick"></span>', "Your top 5")] : []),
-    ...tiers,
-    legendRow(swatch(SATURATION.none), "None", num(0)),
-    legendRow('<span class="swatch dashed"></span>', `Under ${num(meta.min_pois_to_score)} outlets, not scored`),
+    ...classes,
+    ...(ranges[0] ? [legendRow(swatch(DENSITY[0]), "None yet")] : []),
+    legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_pois_to_score)} outlets, not scored`),
   ];
-  const { many } = CATEGORIES[category];
-  return `<p class="legend-title">${many[0].toUpperCase() + many.slice(1)} per locality</p><ul>${rows.join("")}</ul>`;
+  const what = category ? CATEGORIES[category].many : "cafes and QSRs";
+  return `
+    <p class="legend-title">${what[0].toUpperCase() + what.slice(1)} per 10,000 residents</p>
+    <ul>${rows.join("")}</ul>
+    <label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
+      Show outlets</label>`;
 }
 
 function swatch(color) {
-  return `<span class="swatch" style="background:${color}80; border-color:${color}"></span>`;
+  return `<span class="swatch" style="background:${color}"></span>`;
 }
 
-function legendRow(mark, label, value = "") {
-  return `<li>${mark}<span>${label}</span><span class="legend-value">${value}</span></li>`;
+function legendRow(mark, label) {
+  return `<li>${mark}<span>${label}</span></li>`;
 }
 
 // CARTO Positron is muted enough for the data to read clearly, but since
@@ -202,8 +248,9 @@ function watchTiles(map, tiles, element) {
   });
 }
 
-function count(locality, category) {
-  return locality.properties.categories[category].count;
+function labelPoint(locality) {
+  const [lng, lat] = locality.properties.label_point;
+  return [lat, lng];
 }
 
 function latLng(feature) {

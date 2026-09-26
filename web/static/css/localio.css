@@ -401,7 +401,7 @@ h2:focus { outline: none; }
 
 .legend ul {
   display: grid;
-  grid-template-columns: 14px auto auto;
+  grid-template-columns: 14px auto;
   gap: 4px 8px;
   align-items: center;
   margin: 0;
@@ -411,31 +411,37 @@ h2:focus { outline: none; }
 
 .legend li { display: contents; }
 
-.legend-value {
-  color: var(--muted);
-  text-align: right;
+.legend-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.legend-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .swatch {
   display: block;
   width: 12px;
   height: 12px;
-  border: 1.5px solid transparent;
-  border-radius: 50%;
+  border-radius: 2px;
 }
 
-.swatch.dot {
-  width: 8px;
-  height: 8px;
-  margin: 0 2px;
-  border: 1px solid #FFFFFF;
+.swatch.hatch {
+  background: repeating-linear-gradient(45deg, #8C8A83 0 1.5px, transparent 1.5px 4px);
+  outline: 1px solid var(--line);
 }
-
-.swatch.dashed { border: 1.5px dashed var(--muted); }
 
 .swatch.top-pick {
   background: var(--accent);
-  border-color: #FFFFFF;
+  border: 1.5px solid #FFFFFF;
+  border-radius: 50%;
 }
 
 .pick-marker {
