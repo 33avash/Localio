@@ -23,6 +23,19 @@ services:
       data:
         condition: service_completed_successfully
 
+  api:
+    build: ./api
+    environment:
+      # Optional. Without a key the chat answers from templates.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      LOCALIO_GEMINI_MODEL: ${LOCALIO_GEMINI_MODEL:-gemini-3.8-flash}
+      LOCALIO_LLM: ${LOCALIO_LLM:-}
+    volumes:
+      - ./output:/srv/localio-data:ro
+    depends_on:
+      data:
+        condition: service_completed_successfully
+
   # One-off, needs network: rebuilds seed_data/catchments.geojson.
   # Run with: docker compose run --rm catchments
   catchments:
