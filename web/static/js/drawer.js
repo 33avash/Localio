@@ -1,4 +1,4 @@
-import { CATEGORIES, compact, escapeHtml, num } from "./format.js";
+import { CATEGORIES, escapeHtml, num } from "./format.js";
 import { LENSES, score } from "./score.js";
 
 // Menu types in the order the stacked bar draws them, each with a muted
@@ -10,9 +10,12 @@ const MENU = [
   ["Pizza & Italian", "#A95F58"],
   ["Burgers & fried chicken", "#C98A52"],
   ["Sandwiches & rolls", "#93A565"],
-  ["Indian snacks & meals", "#C4A443"],
-  ["Cafe, no stated specialty", "#7C8CA3"],
-  ["Other", "#5E636B"],
+  ["Indian", "#C4A443"],
+  ["Chinese & Asian", "#6FA3A0"],
+  ["Other cuisine", "#8E7FA8"],
+  ["Cafe, no cuisine tagged", "#7C8CA3"],
+  ["QSR, no cuisine tagged", "#66707D"],
+  ["Restaurant, no cuisine tagged", "#4E545C"],
 ];
 
 // The detail drawer for one locality. Sections run from context to
@@ -25,13 +28,15 @@ export function drawerHtml(locality, { category, lens, meta, rank }) {
     <header class="drawer-head">
       <button class="drawer-close" data-action="close-drawer" aria-label="Close ${escapeHtml(p.name)} details">×</button>
       <h2 id="drawer-title" tabindex="-1">${escapeHtml(p.name)}</h2>
-      <p class="drawer-type">${escapeHtml(p.market_type)}${confidence}</p>
+      <p class="drawer-type">${escapeHtml(p.market_type)} · ${p.corporation} ward ${num(p.ward_number)}${confidence}</p>
+      ${p.aliases.length ? `<p class="drawer-aliases">Includes ${escapeHtml(list(p.aliases.slice(0, 4)))}</p>` : ""}
     </header>
 
     <section class="drawer-section">
       <dl class="figures">
         <div><dt>Residents</dt><dd>${num(p.population.toLocaleString("en-US"))}</dd></div>
-        <div><dt>Residents per outlet</dt><dd>${num(p.residents_per_outlet.toLocaleString("en-US"))}
+        <div><dt>Residents per outlet</dt><dd>${p.residents_per_outlet === null ? "no outlets"
+          : num(p.residents_per_outlet.toLocaleString("en-US"))}
           <span class="versus">city median ${num(meta.city.residents_per_outlet.toLocaleString("en-US"))}</span></dd></div>
       </dl>
     </section>
@@ -53,14 +58,14 @@ export function drawerHtml(locality, { category, lens, meta, rank }) {
 
     <section class="drawer-section">
       <h3>Open late</h3>
-      <p>${num(`${Math.round(p.late_night_share * 100)}%`)} of the ${num(p.total_pois)}
-        ${p.total_pois === 1 ? "outlet" : "outlets"} here stay open late.</p>
+      <p>${lateNight(p)}</p>
     </section>
 
-    ${formats.map((c) => footfall(p, c, lens, rank)).join("")}
+    ${capacity(p, meta)}
+    ${formats.map((c) => standing(p, c, lens, rank)).join("")}
 
     <section class="drawer-section">
-      <h3>Similar localities</h3>
+      <h3>Similar wards</h3>
       <div class="chips">${p.similar.map((name) =>
         `<button class="chip" data-action="open-locality" data-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("")}</div>
     </section>
@@ -81,7 +86,7 @@ function formatsTable(p, category) {
       <tbody>
         ${row("Outlets", (s) => num(s.count))}
         ${row("Per 10k residents", (s) => num(s.per_10k.toFixed(2)))}
-        ${row("Avg rating", (s) => (s.avg_rating === null ? "–" : `${num(s.avg_rating.toFixed(1))}★`))}
+        ${row("Chains", (s) => num(s.chain_count))}
       </tbody>
     </table>`;
 }
@@ -115,27 +120,39 @@ function splitBar(p) {
     </ul>`;
 }
 
-// The footfall model's estimate for a standard new outlet of this format,
-// with its range and the place features that move it most.
-function footfall(p, category, lens, rank) {
-  const stats = p.categories[category];
-  const { one } = CATEGORIES[category];
-  const estimate = stats.footfall;
-  const helped = estimate.drivers.filter((d) => d.effect > 0).map((d) => d.phrase);
-  const held = estimate.drivers.filter((d) => d.effect < 0).map((d) => d.phrase);
+// OSM opening hours are sparse, so say how many outlets the share rests on.
+function lateNight(p) {
+  if (p.late_night_share === null) return "No opening hours are recorded for outlets here.";
+  return `${num(`${Math.round(p.late_night_share * 100)}%`)} of the ${num(p.hours_known)}
+    ${p.hours_known === 1 ? "outlet" : "outlets"} with recorded hours stay open past 11 pm.`;
+}
+
+// The capacity model: how much food and drink trade wards with these
+// surroundings support, as a band against the city's median ward.
+function capacity(p, meta) {
+  const [low, mid, high] = p.capacity.multiplier;
+  const helped = p.capacity.drivers.filter((d) => d.effect > 0).map((d) => d.phrase);
+  const held = p.capacity.drivers.filter((d) => d.effect < 0).map((d) => d.phrase);
   const drivers = [
     helped.length ? `Helped by ${list(helped)}.` : "",
     held.length ? `Held back by ${list(held)}.` : "",
   ].join(" ");
-  const lensName = LENSES[lens ?? "footfall"].name.toLowerCase();
-  const points = score(p, category, LENSES[lens ?? "footfall"].weights);
-  const position = rank ? ` · ${num(`#${rank.position}`)} of ${num(rank.of)} confident localities` : "";
+  const expected = Math.round(p.total_pois + p.capacity.gap);
+  const gap = expected > p.total_pois
+    ? `Wards like this hold about ${num(expected)} outlets; it has ${num(p.total_pois)}.`
+    : `It already has ${num(p.total_pois)} outlets, about what wards like it hold (${num(expected)}).`;
   return `
     <section class="drawer-section">
-      <h3>A new ${one} here</h3>
-      <p class="estimate">About ${num(compact(estimate.reviews))} reviews
-        <span class="versus">80% range ${num(compact(estimate.low))}–${num(compact(estimate.high))}</span></p>
-      <p class="drivers">${drivers}</p>
-      <p class="drawer-score">Score ${num(points.toFixed(1))} for ${lensName}${position}</p>
+      <h3>What the surroundings support</h3>
+      <p class="estimate">${num(`${mid.toFixed(1)}×`)} the city's median ward
+        <span class="versus">80% range ${num(`${low.toFixed(1)}×`)}–${num(`${high.toFixed(1)}×`)} · ${escapeHtml(meta.capacity_label)}</span></p>
+      <p class="drivers">${gap} ${drivers}</p>
     </section>`;
+}
+
+function standing(p, category, lens, rank) {
+  const lensName = LENSES[lens ?? "footfall"].name.toLowerCase();
+  const points = score(p, category, LENSES[lens ?? "footfall"].weights);
+  const position = rank ? ` · ${num(`#${rank.position}`)} of ${num(rank.of)} confident wards` : "";
+  return `<p class="drawer-score">${CATEGORIES[category].label} score ${num(points.toFixed(1))} for ${lensName}${position}</p>`;
 }

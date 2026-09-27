@@ -4,7 +4,7 @@ import { createMap } from "./map.js";
 import { methodHtml } from "./method.js";
 import { animateScores } from "./motion.js";
 import { MAX_OPTIONS, renderLoadError, renderPanel, STEPS } from "./panel.js";
-import { cityRating, LENSES, rank } from "./score.js";
+import { LENSES, rank } from "./score.js";
 import { enableSheet } from "./sheet.js";
 
 const panel = document.getElementById("panel");
@@ -139,7 +139,6 @@ function render() {
     meta: data.meta,
     localities: data.localities,
     ranking,
-    averageRating: state.category && cityRating(data.pois, state.category),
     empty: state.step === 3 && !ranking.length ? emptyExplanation() : null,
     conversation: state.conversation,
   });

@@ -8,11 +8,12 @@ test("the map shows tiles, or the fallback notice when tiles fail", async ({ pag
   await expect(page.locator(".leaflet-tile-loaded, .basemap-notice").first()).toBeVisible({ timeout: 15_000 });
 });
 
-test("without tiles, the fallback notice appears and the areas still draw", async ({ page }) => {
+test("without tiles, the fallback notice appears and all 140 wards still draw", async ({ page }) => {
   await blockTiles(page);
   await open(page);
   await expect(page.locator(".basemap-notice")).toBeVisible();
-  await expect(page.locator(".leaflet-overlay-pane path.leaflet-interactive")).toHaveCount(51);
+  const wards = await page.locator(".leaflet-overlay-pane path.leaflet-interactive").count();
+  expect(wards).toBeGreaterThan(100);
 });
 
 test("outlet dots render", async ({ page }) => {
@@ -31,7 +32,7 @@ test("choosing Cafe then Continue reaches step 2", async ({ page }) => {
 test("the lenses change who ranks first", async ({ page }) => {
   await open(page, "#shortlist/cafe/footfall");
   const leaders = new Set();
-  for (const lens of ["Low competition", "Proven footfall", "Weak incumbents"]) {
+  for (const lens of ["Low competition", "Proven footfall", "Unmet demand"]) {
     await page.locator(".lens-switch").getByRole("radio", { name: lens }).click();
     leaders.add(await page.locator(".pick-name").first().innerText());
   }

@@ -1,10 +1,10 @@
-import { CATEGORIES, escapeHtml, num } from "./format.js";
+import { CATEGORIES, escapeHtml } from "./format.js";
 
-export function outletPopup({ name, category, locality, avg_rating, review_count, is_chain }) {
-  const rating = avg_rating === null ? "No rating yet" : `${num(avg_rating.toFixed(1))}★`;
-  const reviews = `${num(review_count.toLocaleString("en-US"))} ${review_count === 1 ? "review" : "reviews"}`;
+const FORMAT_LABELS = { ...Object.fromEntries(Object.entries(CATEGORIES).map(([k, c]) => [k, c.label])), restaurant: "Restaurant" };
+
+export function outletPopup({ name, category, ward, brand, menu }) {
   return `
-    <h3>${escapeHtml(name)}</h3>
-    <p class="popup-sub">${CATEGORIES[category].label} · ${is_chain ? "Chain" : "Independent"} · ${escapeHtml(locality)}</p>
-    <p>${rating} · ${reviews}</p>`;
+    <h3>${escapeHtml(name ?? "Unnamed outlet")}</h3>
+    <p class="popup-sub">${FORMAT_LABELS[category] ?? category} · ${brand ? escapeHtml(brand) : "Independent"}</p>
+    <p>${escapeHtml(menu)} · ${escapeHtml(ward)}</p>`;
 }

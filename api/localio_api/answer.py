@@ -91,15 +91,12 @@ def empty(plan: Plan) -> str:
 
 
 def _estimate(plan: Plan) -> str:
-    """The leader's footfall estimate for the format asked about. The locality's
-    own recommendation might favour the other format, so it isn't used here."""
-    if not plan.category:
-        return ""
+    """The leader's capacity band. The ward's own recommendation might favour
+    the other format, so it isn't used here."""
     leader = plan.localities[0]
-    one = FORMATS[plan.category][0]
-    estimate = leader.properties["categories"][plan.category]["footfall"]
-    return f"A new {one} in {leader.name} would collect about {estimate['reviews']:,} reviews " \
-           f"(80% range {estimate['low']:,} to {estimate['high']:,})."
+    low, mid, high = leader.properties["capacity"]["multiplier"]
+    return f"{leader.name}'s surroundings support {mid:.1f} times the city's median ward " \
+           f"(80% range {low:.1f} to {high:.1f})."
 
 
 def _about(loc, plan: Plan) -> str:

@@ -80,8 +80,8 @@ function chooseLens({ category, lens }) {
   return {
     body: `
       <h2 tabindex="-1">What matters most?</h2>
-      <p class="lede">Each lens weighs footfall, competing ${c.many} and their ratings. They differ in how
-        much each one counts.</p>
+      <p class="lede">Each lens weighs the same three things: how much trade the surroundings support, how
+        many ${c.many} are already there per resident, and how far short of wards like it a ward falls.</p>
       <div class="options" role="radiogroup" aria-label="Priority">${rows.join("")}</div>`,
     foot: `<button class="primary" data-action="next" ${lens ? "" : "disabled"}>Show my shortlist</button>`,
   };
@@ -89,7 +89,7 @@ function chooseLens({ category, lens }) {
 
 // Each row carries a bar behind it, scaled to the top score, so the list
 // reads as a ranking rather than five unrelated numbers.
-function shortlist({ category, lens, filters }, { meta, localities, ranking, averageRating, empty }) {
+function shortlist({ category, lens, filters }, { meta, localities, ranking, empty }) {
   const c = CATEGORIES[category];
   const top = ranking.slice(0, 5);
   const best = Math.max(0.01, ...top.map((r) => r.score));
@@ -101,7 +101,7 @@ function shortlist({ category, lens, filters }, { meta, localities, ranking, ave
         ? "" : ' <span class="low-flag">low confidence</span>'}</span>
       <span class="pick-score num" data-score="${score}">${score.toFixed(1)}</span>
       <span class="pick-why">${rationale(feature.properties, category, lens,
-        { averageRating, cityPer10k: meta.city.per_10k[category] })}</span>
+        { cityPer10k: meta.city.per_10k[category] })}</span>
     </button></li>`);
   const lensButtons = Object.entries(LENSES).map(([key, l]) =>
     `<button role="radio" aria-checked="${lens === key}" data-action="lens" data-value="${key}">${l.name}</button>`);
@@ -112,11 +112,11 @@ function shortlist({ category, lens, filters }, { meta, localities, ranking, ave
   return {
     body: `
       <h2 tabindex="-1">Your shortlist</h2>
-      <p class="lede">The five best localities for a new ${c.one}, ranked for ${LENSES[lens].name.toLowerCase()}.</p>
+      <p class="lede">The five best wards for a new ${c.one}, ranked for ${LENSES[lens].name.toLowerCase()}.</p>
       <div class="lens-switch" role="radiogroup" aria-label="Rank by">${lensButtons.join("")}</div>
       ${filterControls(c, filters)}
       ${list}
-      <p class="note">${num(confident)} localities have at least ${num(meta.min_pois_to_score)} cafes and QSRs
+      <p class="note">${num(confident)} wards have at least ${num(meta.min_pois_to_score)} cafes and QSRs
         between them. The other ${num(localities.length - confident)} are scored too, but hatched on the map and
         left off this list unless you include them, because so few outlets make their numbers shaky.</p>`,
     foot: `
@@ -189,8 +189,8 @@ function barWidth(score, best) {
 
 function option({ action, value, selected, title, detail, weights }) {
   const split = weights
-    ? `<span class="option-weights">Footfall ${percent(weights.demand)} · Competition ${percent(weights.supply)}
-       · Ratings ${percent(weights.weakness)}</span>`
+    ? `<span class="option-weights">Demand ${percent(weights.demand)} · Competition ${percent(weights.supply)}
+       · Unmet demand ${percent(weights.gap)}</span>`
     : "";
   return `
     <button class="option" role="radio" aria-checked="${selected}" data-action="${action}" data-value="${value}">

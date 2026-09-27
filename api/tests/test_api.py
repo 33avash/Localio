@@ -6,7 +6,7 @@ from localio_api.evaluate import evaluate
 
 def test_health(client):
     body = client.get("/api/health").json()
-    assert body["status"] == "ok" and body["localities"] == 51
+    assert body["status"] == "ok" and body["localities"] == 140
 
 
 def test_empty_and_long_questions_get_a_readable_400(client):

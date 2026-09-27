@@ -18,9 +18,9 @@ def test_off_topic_is_refused(localities):
     assert plan("who won the world cup", localities, _similar(localities)).kind == "refuse"
 
 
-def test_a_named_locality_is_in_scope_even_with_low_similarity(localities):
+def test_a_place_inside_a_ward_finds_the_ward_even_with_low_similarity(localities):
     decided = plan("thoughts on Baner?", localities, _similar(localities))
-    assert decided.kind == "about" and [loc.name for loc in decided.localities] == ["Baner"]
+    assert decided.kind == "about" and [loc.name for loc in decided.localities] == ["Baner Balewadi"]
 
 
 def test_gap_questions_list_places_with_none_of_that_format(localities):
@@ -56,9 +56,9 @@ def _gemini_reply(monkeypatch, payload):
 
 def test_gemini_citations_outside_the_plan_are_dropped(monkeypatch, localities):
     decided = plan("Tell me about Baner", localities, _similar(localities))
-    _gemini_reply(monkeypatch, json.dumps({"answer": "Baner has no QSRs yet.", "cited": ["Baner", "Atlantis"]}))
+    _gemini_reply(monkeypatch, json.dumps({"answer": "Baner Balewadi has room.", "cited": ["Baner Balewadi", "Atlantis"]}))
     reply = respond("Tell me about Baner", decided, "key", "model")
-    assert reply["mode"] == "gemini" and reply["cited"] == ["Baner"]
+    assert reply["mode"] == "gemini" and reply["cited"] == ["Baner Balewadi"]
 
 
 def test_gemini_with_no_valid_citation_falls_back(monkeypatch, localities):
@@ -79,4 +79,4 @@ def test_ranking_answer_sticks_to_the_format_asked_about(localities):
     decided = plan("Where should I open a QSR?", localities, _similar(localities))
     text = template(decided)
     assert "cafe is the better bet" not in text
-    assert f"A new QSR in {decided.localities[0].name}" in text
+    assert f"{decided.localities[0].name}'s surroundings support" in text

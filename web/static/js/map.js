@@ -11,6 +11,7 @@ const OSM_ATTRIBUTION =
 const COLORS = {
   cafe: "#4F79A8",
   fast_food: "#8466B0",
+  restaurant: "#9A958C",
   other: "#6B6E73",
 };
 
@@ -45,6 +46,14 @@ export function createMap(element, { cartoKey, onSelect }) {
   // sheet moving, crossing the breakpoint) needs a re-measure, or tiles stop
   // short and clicks land in the wrong place.
   new ResizeObserver(() => map.invalidateSize()).observe(element);
+
+  // Hover labels only where there's a hover. On a touch screen a tap would
+  // open one that nothing closes, leaving a dark box stranded on the map;
+  // a tap opens the drawer instead. Any label left open closes as soon as
+  // the map moves or is clicked.
+  const canHover = window.matchMedia("(hover: hover)").matches;
+  const closeLabels = () => map.eachLayer((layer) => layer.closeTooltip?.());
+  map.on("movestart zoomstart click", closeLabels);
 
   // Outlet dots get their own pane above the areas, so a hovered area
   // brought to the front never covers them.
@@ -143,7 +152,10 @@ export function createMap(element, { cartoKey, onSelect }) {
         },
       });
       area.eachLayer((layer) => {
-        layer.bindTooltip(() => areaLabel(locality, view.category), { sticky: true, direction: "top", className: "area-tip", opacity: 1 });
+        if (canHover) {
+          layer.bindTooltip(() => areaLabel(locality, view.category),
+            { sticky: true, direction: "top", offset: [0, -12], className: "area-tip", opacity: 1 });
+        }
         layer.on("mouseover", () => layer.setStyle(HIGHLIGHT).bringToFront());
         layer.on("mouseout", () => { if (name !== selected) area.resetStyle(layer); });
         layer.on("click", () => onSelect(name));
@@ -162,6 +174,7 @@ export function createMap(element, { cartoKey, onSelect }) {
 
   // Keep the open drawer's area outlined in the accent.
   function select(name) {
+    closeLabels();
     if (selected && areaLayers.has(selected)) {
       const { area, layer } = areaLayers.get(selected);
       area.resetStyle(layer);
