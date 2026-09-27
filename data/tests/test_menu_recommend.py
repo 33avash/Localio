@@ -1,27 +1,25 @@
 import pandas as pd
 
-from localio.menu import menu_type, tag
+from localio.menu import menu_type
 from localio.recommend import sentence
 
 CITY = {"cafe": 0.3, "fast_food": 0.2}
 
 
-def test_brand_beats_keywords():
-    assert menu_type("Starbucks FC Road", "Starbucks", "cafe") == "Coffee"
+def test_cuisine_tag_wins():
+    assert menu_type("coffee_shop", "Some Place", "", "cafe") == "Coffee"
+    assert menu_type("north_indian;chinese", "", "", "restaurant") == "Indian"
 
 
-def test_most_specific_keyword_wins():
-    assert menu_type("Burger Mills Cafe", "Non Branded", "fast_food") == "Burgers & fried chicken"
-    assert menu_type("The Chai Bar And Cafe Katraj", "Non Branded", "cafe") == "Chai & tea"
+def test_name_keywords_when_there_is_no_tag():
+    assert menu_type("", "Burger Mills Cafe", "", "fast_food") == "Burgers & fried chicken"
+    assert menu_type("", "Domino's Pizza", "Domino's", "fast_food") == "Pizza & Italian"
 
 
-def test_fallbacks():
-    assert menu_type("Boho Boho", "Non Branded", "cafe") == "Cafe, no stated specialty"
-    assert menu_type("Yougo", "Non Branded", "fast_food") == "Other"
-
-
-def test_other_stays_under_eight_percent(pois):
-    assert (tag(pois) == "Other").mean() < 0.08
+def test_untagged_outlets_say_so():
+    assert menu_type("", "Boho Boho", "", "cafe") == "Cafe, no cuisine tagged"
+    assert menu_type("", "Shree Swami", "", "restaurant") == "Restaurant, no cuisine tagged"
+    assert menu_type("mexican", "", "", "restaurant") == "Other cuisine"
 
 
 def _row(**overrides):

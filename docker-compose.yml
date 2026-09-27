@@ -1,8 +1,30 @@
 name: localio
 
 services:
+  # A throwaway PostGIS for the pipeline's spatial joins. tmpfs, not a
+  # volume: every run starts from an empty database, so nothing stale
+  # can leak between runs. It's local-only; the password isn't a secret.
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: localio
+      POSTGRES_PASSWORD: localio
+      POSTGRES_DB: localio
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localio -d localio"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   data:
     build: ./data
+    environment:
+      LOCALIO_DB: postgresql://localio:localio@db:5432/localio
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       # Bind mounts, not named volumes: a named volume keeps old GeoJSON
       # between runs, and the map would quietly show stale numbers.
@@ -58,11 +80,19 @@ services:
       api:
         condition: service_healthy
 
-  # One-off, needs network: rebuilds seed_data/catchments.geojson.
-  # Run with: docker compose run --rm catchments
-  catchments:
-    build: ./tools/catchments
+  # One-off tools that need network access and write to seed_data/.
+  # docker compose run --rm osm [--refresh]   OpenStreetMap places and context
+  # docker compose run --rm population        residents per ward
+  osm:
+    build: ./tools/geo
     profiles: ["tools"]
+    entrypoint: ["python", "fetch_osm.py"]
     volumes:
-      - ./data/localio:/app/localio:ro
+      - ./seed_data:/app/seed_data
+
+  population:
+    build: ./tools/geo
+    profiles: ["tools"]
+    entrypoint: ["python", "build_population.py"]
+    volumes:
       - ./seed_data:/app/seed_data

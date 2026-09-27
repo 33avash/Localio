@@ -1,10 +1,10 @@
-"""Market types: group localities with similar food-and-drink profiles.
+"""Market types: group wards with similar food-and-drink profiles.
 
-k-means on standardised locality profiles, with k from 3 to 6 chosen by
-silhouette score. The clusters describe the 51 localities; they aren't a
+k-means on standardised ward profiles, with k from 3 to 6 chosen by
+silhouette score. The clusters describe the 140 wards; they aren't a
 prediction. Each cluster is named from whichever feature sets its centre
-furthest from the city average, and each locality also gets the three
-localities whose profiles are closest to its own.
+furthest from the city average, and each ward also gets the three wards
+whose profiles are closest to its own.
 """
 
 import numpy as np
@@ -17,40 +17,38 @@ from sklearn.preprocessing import StandardScaler
 K_RANGE = range(3, 7)
 SIMILAR = 3
 
-PROFILE = ("log_outlets_per_10k", "chain_share", "mean_price", "late_night_share", "mean_rating", "demand", "cafe_share")
+PROFILE = ("log_outlets_per_10k", "chain_share", "restaurant_share", "late_night_share", "capacity", "cafe_share")
 
 # (feature, above or below average) -> the name a cluster gets when that is
 # what sets it apart most.
 NAMES = {
-    ("demand", 1): "Busy high street",
-    ("demand", -1): "Quiet suburb",
+    ("capacity", 1): "Busy high street",
+    ("capacity", -1): "Quiet suburb",
     ("log_outlets_per_10k", 1): "Crowded market",
     ("log_outlets_per_10k", -1): "Under-served area",
     ("chain_share", 1): "Chain corridor",
     ("chain_share", -1): "Independent pocket",
     ("late_night_share", 1): "Late-night strip",
     ("late_night_share", -1): "Daytime trade",
-    ("mean_price", 1): "Premium pocket",
-    ("mean_price", -1): "Budget belt",
+    ("restaurant_share", 1): "Restaurant row",
+    ("restaurant_share", -1): "Snack and cafe strip",
     ("cafe_share", 1): "Cafe quarter",
     ("cafe_share", -1): "QSR belt",
-    ("mean_rating", 1): "Well-rated scene",
-    ("mean_rating", -1): "Beatable incumbents",
 }
 
 
-def profiles(localities: pd.DataFrame, pois: pd.DataFrame, demand: pd.Series) -> pd.DataFrame:
-    by_locality = pois.groupby("locality")
-    chains = by_locality["is_chain_outlet"].sum()
+def profiles(wards: pd.DataFrame, capacity: pd.Series) -> pd.DataFrame:
+    """What each ward's food and drink looks like. Wards with no outlets get
+    the median share for the share features, so they cluster on the rest."""
+    outlets = wards["total_pois"].replace(0, np.nan)
     frame = pd.DataFrame({
-        "log_outlets_per_10k": np.log1p(localities["total_per_10k"]),
-        "chain_share": chains / localities["total_pois"],
-        "mean_price": by_locality["price_level"].mean(),
-        "late_night_share": by_locality["is_late_night"].mean(),
-        "mean_rating": by_locality["avg_rating"].mean(),
-        "demand": demand,
-        "cafe_share": localities["cafe_count"] / localities["total_pois"],
-    }, index=localities.index)
+        "log_outlets_per_10k": np.log1p(wards["total_per_10k"]),
+        "chain_share": wards["chain_count"] / outlets,
+        "restaurant_share": wards["restaurant_count"] / outlets,
+        "late_night_share": wards["late_night_count"] / wards["hours_known"].replace(0, np.nan),
+        "capacity": capacity,
+        "cafe_share": wards["cafe_count"] / outlets,
+    }, index=wards.index)
     return frame.fillna(frame.median())
 
 

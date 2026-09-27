@@ -1,85 +1,90 @@
 """Run the pipeline: python -m localio
 
-Reads LOCALIO_INPUT (default seed_data/pune_cafes_qsr.csv) and
-LOCALIO_CATCHMENTS (default seed_data/catchments.geojson), and writes
-pois.geojson, localities.geojson and model_report.json to LOCALIO_OUTPUT
-(default output/). Exits 1 with a message on stderr if the input is
-missing or any check fails; nothing is written in that case.
+Reads the committed inputs in LOCALIO_SEED (default seed_data/): the 140
+PMC and PCMC wards, residents per ward, and OpenStreetMap's food and drink
+outlets and context. Loads them into PostGIS (LOCALIO_DB), places every
+outlet in its ward with ST_Contains, fits the capacity model, scores every
+ward, and writes pois.geojson, localities.geojson and model_report.json to
+LOCALIO_OUTPUT (default output/). Exits 1 with a message on stderr if an
+input is missing, the database is unreachable or any check fails; nothing
+is written in that case.
 """
 
 import os
 import sys
 from pathlib import Path
 
-from localio import CATEGORIES, ml
+import psycopg
+
+from localio import CATEGORIES, db, ml, sources
 from localio.aggregate import aggregate
-from localio.clean import clean
 from localio.density import add_density
 from localio.export import localities_collection, pois_collection, write_json
-from localio.geo import CatchmentError, attach, load_catchments
-from localio.load import InputError, load_table
 from localio.menu import mix, tag
-from localio.opportunity import score_v2
+from localio.opportunity import score
 from localio.recommend import sentence
-from localio.score import DEFAULT_WEIGHTS, score
-from localio.validate import (
-    Check,
-    check_catchments,
-    check_counts,
-    check_menu,
-    check_scores,
-    check_sentences,
-    check_v2,
-)
+from localio.score import DEFAULT_WEIGHTS
+from localio.validate import Check, check_pois, check_scores, check_sentences, check_wards, hrsl_agreement
 
-DEFAULT_INPUT = "seed_data/pune_cafes_qsr.csv"
-DEFAULT_CATCHMENTS = "seed_data/catchments.geojson"
+DEFAULT_SEED = "seed_data"
 DEFAULT_OUTPUT = "output"
 
 
 def main() -> int:
-    input_path = Path(os.environ.get("LOCALIO_INPUT", DEFAULT_INPUT))
-    catchments_path = Path(os.environ.get("LOCALIO_CATCHMENTS", DEFAULT_CATCHMENTS))
+    seed = Path(os.environ.get("LOCALIO_SEED", DEFAULT_SEED))
     output_dir = Path(os.environ.get("LOCALIO_OUTPUT", DEFAULT_OUTPUT))
-    print(f"localio: reading {input_path}")
+    print(f"localio: reading {seed}/")
     try:
-        raw = load_table(input_path)
-        catchments = load_catchments(catchments_path)
-    except (InputError, CatchmentError) as err:
+        ward_sources = sources.load_wards(seed)
+        raw_pois, osm_meta = sources.load_pois(seed)
+        context = sources.load_context(seed)
+    except sources.SourceError as err:
         return _fail(str(err))
+    _line("OSM", f"{len(raw_pois):,} food and drink places, retrieved {osm_meta['retrieved']}")
 
-    pois, dropped = clean(raw)
-    _line("rows read", len(raw))
-    for reason, count in dropped.items():
-        _line("dropped", f"{count}  ({reason})")
+    try:
+        conn = db.connect()
+    except psycopg.OperationalError as err:
+        return _fail(f"can't reach the database ({err}); is the db service running?")
+    with conn:
+        db.load(conn, ward_sources, raw_pois, context)
+        placement = db.assign_wards(conn)
+        wards = db.wards_frame(conn)
+        pois = db.pois_frame(conn)
+        pcmc_places, nearest = db.pcmc_names(conn), db.nearest_places(conn)
+        aliases = db.ward_places(conn)
+        features = db.ward_features(conn)
 
-    localities, density_ranges = add_density(attach(aggregate(pois), catchments))
-    checks = check_counts(pois, localities) + check_catchments(localities)
+    by_key = {w.key: w for w in ward_sources}
+    wards["population_method"] = [by_key[k].population_method for k in wards.index]
+    wards["hrsl_people"] = [by_key[k].hrsl_people for k in wards.index]
+    wards["aliases"] = [aliases.get(k, []) for k in wards.index]
+    wards, density_ranges = add_density(aggregate(wards, pois, pcmc_places, nearest))
+
+    checks = check_wards(wards) + check_pois(pois, wards, placement)
     if not all(check.ok for check in checks):
         return _finish(checks)
+    _line("HRSL", hrsl_agreement(wards))
 
-    # v1's heuristic score is kept only as a check on the aggregation: its
-    # top 3 are known, so a wrong join shows up here before anything else.
-    checks += check_scores(score(localities, DEFAULT_WEIGHTS))
-
-    menu_types = tag(pois)
-    results = ml.run(pois, localities)
+    results = ml.run(wards, features)
     _report_model(results.report)
-    scored = score_v2(localities, results.demand)
+    scored = score(wards, results.capacity)
     city = {
         "per_10k": {key: round(float(scored[f"{key}_per_10k"].median()), 2) for key in (*CATEGORIES, "total")},
-        "residents_per_outlet": round(float((scored["population"] / scored["total_pois"]).median())),
+        "residents_per_outlet": round(float((scored["population"] / scored["total_pois"].replace(0, float("nan"))).median())),
     }
     scored["recommendation"] = scored.apply(sentence, axis=1, city_per_10k=city["per_10k"])
-    checks += check_v2(scored) + check_menu(menu_types) + check_sentences(scored["recommendation"])
-    if not all(check.ok for check in checks):
-        return _finish(checks)
-    _finish(checks)
+    checks += check_scores(scored) + check_sentences(scored["recommendation"])
+    if _finish(checks):
+        return 1
 
+    menu_types = tag(pois)
+    vintage = {"outlets": f"OpenStreetMap, retrieved {osm_meta['retrieved']}", "wards": "2012 electoral wards",
+               "population": "Census 2011 totals"}
     outputs = {
-        "pois.geojson": pois_collection(pois, menu_types),
-        "localities.geojson": localities_collection(
-            scored, pois, results, mix(pois, menu_types), DEFAULT_WEIGHTS, density_ranges, city),
+        "pois.geojson": pois_collection(pois, menu_types, scored["name"]),
+        "localities.geojson": localities_collection(scored, pois, results, mix(pois, menu_types, scored.index),
+                                                    DEFAULT_WEIGHTS, density_ranges, city, vintage),
         "model_report.json": {**results.report, "menu_types": menu_types.value_counts().to_dict()},
     }
     for filename, document in outputs.items():
@@ -93,19 +98,18 @@ def main() -> int:
 def _finish(checks: list[Check]) -> int:
     """Print every check; return 1 (and say nothing gets written) if any failed."""
     for check in checks:
-        _report(check)
+        _line(check.label, check.shown, "ok" if check.ok else "FAIL")
     failed = [check for check in checks if not check.ok]
     return _fail(f"{len(failed)} check(s) failed; no output written") if failed else 0
 
 
 def _report_model(report: dict) -> None:
-    footfall = report["footfall"]
-    metrics = footfall["candidates"]
-    chosen, baseline = metrics["ridge"], metrics["median baseline"]
-    status = "ok" if footfall["chosen"] else "note"
-    _line("footfall", f"ridge MAE {chosen['mae']:.2f} vs baseline {baseline['mae']:.2f}, "
-                      f"R² {chosen['r2']:.2f}, ρ {chosen['spearman']:.2f} on held-out localities", status)
-    _line("demand", footfall["demand_source"], status)
+    capacity = report["capacity"]
+    chosen, baseline = capacity["candidates"]["linear quantile"], capacity["candidates"]["median baseline"]
+    status = "ok" if capacity["chosen"] else "note"
+    _line("capacity", f"p50 MAE {chosen['mae']:.3f} vs baseline {baseline['mae']:.3f}, R² {chosen['r2']:.2f}, "
+                      f"ρ {chosen['spearman']:.2f}, p10-p90 holds {chosen['coverage']:.0%} (leave one ward out)", status)
+    _line("label", f"used as {'an' if capacity['label'] == 'estimate' else 'a'} {capacity['label']}", status)
     types = report["market_types"]
     _line("types", f"{types['k']} market types, silhouette {types['silhouette']:.2f}")
 
@@ -118,14 +122,6 @@ def _fail(message: str) -> int:
 
 def _line(label: str, value: object, status: str = "") -> None:
     print(f"  {status:<6}{label:<12}{value}")
-
-
-def _report(check: Check) -> None:
-    if check.ok:
-        _line(check.label, check.shown or check.actual, "ok")
-    else:
-        expected = ", ".join(check.expected) if isinstance(check.expected, list) else check.expected
-        _line(check.label, f"{check.shown or check.actual}  (expected {expected})", "FAIL")
 
 
 if __name__ == "__main__":

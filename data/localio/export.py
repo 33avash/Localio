@@ -1,14 +1,15 @@
 """Build and write the files the map reads.
 
-pois.geojson        one Point per POI, with its menu type
-localities.geojson  one Polygon per locality catchment: per-format stats,
-                    density classes, normalized score components, the
-                    footfall model's estimate, market type and the
-                    recommendation sentence
-model_report.json   how each model was evaluated, for the Method view
+pois.geojson        one Point per food and drink outlet inside a ward
+localities.geojson  one Polygon per ward: residents, per-format counts and
+                    density classes, score components, the capacity
+                    model's band and drivers, market type, similar wards,
+                    menu mix and the recommendation
+model_report.json   how each model was evaluated, for "How it works"
 
-The normalized components ship with the file so the browser can re-weight
-scores instantly without a round trip.
+The score components ship with the file so the browser can re-weight
+scores instantly. Ward boundaries derive from DataMeet's CC BY-SA data,
+so localities.geojson carries that licence.
 """
 
 import json
@@ -21,20 +22,18 @@ import pandas as pd
 
 from localio import CATEGORIES
 from localio.ml import Results
-from localio.ml.features import LABELS
+from localio.ml.capacity import LABELS
 from localio.score import MIN_POIS_TO_SCORE
 
 
-def pois_collection(pois: pd.DataFrame, menu_types: pd.Series) -> dict:
+def pois_collection(pois: pd.DataFrame, menu_types: pd.Series, names: pd.Series) -> dict:
     features = [
-        _point(poi["longitude"], poi["latitude"], {
-            "id": poi["poi_id"],
-            "name": _text(poi["name"]),
-            "category": poi["category"],
-            "locality": poi["locality"],
-            "avg_rating": _num(poi["avg_rating"], 1),
-            "review_count": int(poi["review_count"]),
-            "is_chain": bool(poi["is_chain_outlet"]),
+        _point(poi["lon"], poi["lat"], {
+            "id": poi["id"],
+            "name": poi["name"] or None,
+            "category": poi["format"],
+            "ward": names[poi["ward"]],
+            "brand": poi["brand"] or None,
             "menu": menu_types[index],
         })
         for index, poi in pois.iterrows()
@@ -43,19 +42,23 @@ def pois_collection(pois: pd.DataFrame, menu_types: pd.Series) -> dict:
 
 
 def localities_collection(scored: pd.DataFrame, pois: pd.DataFrame, ml: Results, menu_mix: pd.DataFrame,
-                          weights: dict, density_ranges: dict, city: dict) -> dict:
+                          weights: dict, density_ranges: dict, city: dict, vintage: dict) -> dict:
     features = [
-        {"type": "Feature", "geometry": row["geometry"], "properties": _locality_properties(name, row, ml, menu_mix)}
-        for name, row in scored.iterrows()
+        {"type": "Feature", "geometry": json.loads(row["geojson"]),
+         "properties": _ward_properties(key, row, scored, ml, menu_mix)}
+        for key, row in scored.iterrows()
     ]
     meta = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "min_pois_to_score": MIN_POIS_TO_SCORE,
         "default_weights": weights,
-        "category_counts": {c: int((pois["category"] == c).sum()) for c in CATEGORIES},
+        "category_counts": {c: int((pois["format"] == c).sum()) for c in CATEGORIES},
+        "outlets": int(len(pois)),
         "density_ranges": density_ranges,
         "city": city,
-        "demand_source": ml.report["footfall"]["demand_source"],
+        "capacity_label": ml.report["capacity"]["label"],
+        "vintage": vintage,
+        "licence": "Ward boundaries © DataMeet, CC BY-SA 2.5 IN; outlets © OpenStreetMap contributors, ODbL",
     }
     return {"type": "FeatureCollection", "meta": meta, "features": features}
 
@@ -65,62 +68,59 @@ def write_json(document: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     with tmp.open("w", encoding="utf-8", newline="\n") as f:
-        json.dump(document, f, ensure_ascii=False, indent=2)
+        json.dump(document, f, ensure_ascii=False, indent=1)
     os.chmod(tmp, 0o644)
     os.replace(tmp, path)
 
 
-def _locality_properties(name: str, row: pd.Series, ml: Results, menu_mix: pd.DataFrame) -> dict:
-    categories = {c: _category(name, row, c, ml) for c in CATEGORIES}
-    shares = menu_mix.loc[name]
+def _ward_properties(key: str, row: pd.Series, scored: pd.DataFrame, ml: Results, menu_mix: pd.DataFrame) -> dict:
+    band = ml.capacity.loc[key]
+    multiplier = ml.multiplier.loc[key]
     return {
-        "name": name,
+        "key": key,
+        "name": row["name"],
+        "corporation": row["corporation"],
+        "ward_number": int(row["number"]),
+        "admin_zone": row["admin_zone"],
+        "aliases": [a for a in row["aliases"] if a != row["name"]],
         "status": "insufficient_data" if row["low_confidence"] else "scored",
         "total_pois": int(row["total_pois"]),
-        "total_reviews": int(row["total_reviews"]),
         "population": int(row["population"]),
+        "population_method": row["population_method"],
         "area_km2": _num(row["area_km2"], 2),
-        "label_point": [_num(row["label_longitude"], 5), _num(row["label_latitude"], 5)],
+        "label_point": [row["label_longitude"], row["label_latitude"]],
         "total_per_10k": _num(row["total_per_10k"], 2),
         "total_density_class": int(row["total_density_class"]),
-        "residents_per_outlet": round(row["population"] / row["total_pois"]),
-        "chain_share": _num(ml.profile.at[name, "chain_share"], 3),
-        "late_night_share": _num(ml.profile.at[name, "late_night_share"], 3),
-        "market_type": ml.archetype[name],
-        "similar": ml.similar[name],
-        "menu": {kind: round(float(share), 3) for kind, share in shares.items() if share > 0},
+        "residents_per_outlet": round(row["population"] / row["total_pois"]) if row["total_pois"] else None,
+        "chain_share": _num(ml.profile.at[key, "chain_share"], 3),
+        "late_night_share": _num(row["late_night_count"] / row["hours_known"], 3) if row["hours_known"] else None,
+        "hours_known": int(row["hours_known"]),
+        "market_type": ml.archetype[key],
+        "similar": [scored.at[other, "name"] for other in ml.similar[key]],
+        "menu": {kind: round(float(share), 3) for kind, share in menu_mix.loc[key].items() if share > 0},
         "recommendation": row["recommendation"],
-        "categories": categories,
+        "capacity": {
+            "per_km2": [_num(band[q], 1) for q in ("p10", "p50", "p90")],
+            "multiplier": [_num(multiplier[q], 2) for q in ("p10", "p50", "p90")],
+            "gap": _num(ml.gap[key], 1),
+            "drivers": [{**d, "label": LABELS[d["feature"]]} for d in ml.drivers[key]],
+        },
+        "categories": {c: _category(row, c) for c in CATEGORIES},
     }
 
 
-def _category(name: str, row: pd.Series, c: str, ml: Results) -> dict:
-    stats = {
+def _category(row: pd.Series, c: str) -> dict:
+    return {
         "count": int(row[f"{c}_count"]),
-        "avg_rating": _num(row[f"{c}_avg_rating"], 2),
         "chain_count": int(row[f"{c}_chain_count"]),
         "independent_count": int(row[f"{c}_independent_count"]),
         "per_10k": _num(row[f"{c}_per_10k"], 2),
         "density_class": int(row[f"{c}_density_class"]),
         "demand_n": _num(row[f"{c}_demand_n"]),
         "supply_n": _num(row[f"{c}_supply_n"]),
-        "weakness_n": _num(row[f"{c}_weakness_n"]),
+        "gap_n": _num(row[f"{c}_gap_n"]),
         "score": _num(row[f"{c}_score"], 2),
     }
-    if c in ml.footfall:
-        estimate = ml.footfall[c].loc[name]
-        stats["footfall"] = {
-            "reviews": _reviews(estimate["log"]),
-            "low": _reviews(estimate["low"]),
-            "high": _reviews(estimate["high"]),
-            "drivers": [{**d, "label": LABELS[d["feature"]]} for d in ml.drivers[c][name]],
-        }
-    return stats
-
-
-def _reviews(log_value: float) -> int:
-    """Back from log(1 + reviews) to a whole review count."""
-    return max(0, round(math.expm1(log_value)))
 
 
 def _point(longitude: float, latitude: float, properties: dict) -> dict:
@@ -132,8 +132,6 @@ def _point(longitude: float, latitude: float, properties: dict) -> dict:
 
 
 def _num(value, digits: int = 4) -> float | None:
-    return None if pd.isna(value) else round(float(value), digits)
-
-
-def _text(value) -> str | None:
-    return None if pd.isna(value) else str(value)
+    if value is None or (isinstance(value, float) and math.isnan(value)) or pd.isna(value):
+        return None
+    return round(float(value), digits)

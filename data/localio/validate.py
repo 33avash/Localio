@@ -1,8 +1,8 @@
-"""Known-good figures for the seed dataset.
+"""Checks the pipeline runs before it writes anything.
 
-A wrong aggregation still draws a map that looks perfectly fine, so these
-numbers are the only real check. If you swap in a different dataset,
-update EXPECTED to match it.
+A wrong spatial join still draws a map that looks perfectly fine, so every
+number the map depends on is checked against something it must satisfy.
+Any failed check exits 1 and nothing is written.
 """
 
 from dataclasses import dataclass
@@ -11,91 +11,76 @@ import numpy as np
 import pandas as pd
 
 from localio import CATEGORIES
-from localio.score import ranked
 
-LABELS = {"cafe": "cafe", "fast_food": "QSR"}
-MAX_OTHER_MENU = 0.08
-
-EXPECTED = {
-    "pois": 259,
-    "localities": 51,
-    "category_counts": {"cafe": 165, "fast_food": 94},
-    "scored": 23,
-    "top3": {
-        "cafe": ["Deccan Gymkhana", "Wakad", "Shivajinagar"],
-        "fast_food": ["Koregaon Park", "Deccan Gymkhana", "Kalyani Nagar"],
-    },
-}
+CENSUS_2011_PMC = 3_124_458
+EXPECTED_WARDS = {"PMC": 76, "PCMC": 64}
+MAX_WARD_POPULATION = 120_000
+PMC_TOLERANCE = 0.05
+# Electoral wards are drawn to hold similar populations; a ward far outside
+# this band of its corporation's mean means a bad join or a bad input.
+WARD_BAND = (0.5, 2.0)
+MIN_POIS = 1_200
+MIN_CAFES = 200
+PER_10K_BAND = (2, 40)
 
 
 @dataclass(frozen=True)
 class Check:
     label: str
-    actual: object
-    expected: object
-    shown: str = ""
-
-    @property
-    def ok(self) -> bool:
-        return self.actual == self.expected
+    ok: bool
+    shown: str
 
 
-def check_counts(pois: pd.DataFrame, localities: pd.DataFrame) -> list[Check]:
-    counts = pois["category"].value_counts()
-    expected = EXPECTED["category_counts"]
+def check_wards(wards: pd.DataFrame) -> list[Check]:
+    counts = wards["corporation"].value_counts().to_dict()
+    largest = wards["population"].max()
+    pmc = wards.loc[wards["corporation"] == "PMC", "population"].sum()
+    means = wards.groupby("corporation")["population"].transform("mean")
+    ratio = wards["population"] / means
+    outliers = wards.index[(ratio < WARD_BAND[0]) | (ratio > WARD_BAND[1])].tolist()
     return [
-        Check("POIs", len(pois), EXPECTED["pois"]),
-        Check("localities", len(localities), EXPECTED["localities"]),
-        Check("cafes", int(counts.get("cafe", 0)), expected["cafe"]),
-        Check("QSRs", int(counts.get("fast_food", 0)), expected["fast_food"]),
+        Check("wards", counts == EXPECTED_WARDS, f"{counts.get('PMC', 0)} PMC + {counts.get('PCMC', 0)} PCMC"),
+        Check("max ward", largest <= MAX_WARD_POPULATION, f"{largest:,} residents (limit {MAX_WARD_POPULATION:,})"),
+        Check("PMC total", abs(pmc / CENSUS_2011_PMC - 1) <= PMC_TOLERANCE,
+              f"{pmc:,} vs Census 2011 {CENSUS_2011_PMC:,} (voter shares scaled to it, so this holds by construction)"),
+        Check("ward sizes", not outliers,
+              f"every ward within {WARD_BAND[0]}x-{WARD_BAND[1]}x its corporation's mean"
+              if not outliers else f"outside {WARD_BAND}: {', '.join(outliers)}"),
     ]
 
 
-def check_catchments(localities: pd.DataFrame) -> list[Check]:
-    """Every locality needs a catchment with people in it, or per-capita numbers break."""
-    matched = int(localities["area_km2"].notna().sum())
-    populated = int((localities["population"] > 0).sum())
-    people = localities["population"].sum()
+def hrsl_agreement(wards: pd.DataFrame) -> str:
+    """Reported, not asserted: how well HRSL agrees with the PMC voter rolls."""
+    pmc = wards[(wards["corporation"] == "PMC") & wards["population_method"].str.startswith("2012 voters")]
+    r = np.corrcoef(pmc["population"], pmc["hrsl_people"])[0, 1]
+    return f"r = {r:.2f} between voter-based and HRSL ward populations (PMC); HRSL isn't used"
+
+
+def check_pois(pois: pd.DataFrame, wards: pd.DataFrame, placement: dict) -> list[Check]:
+    people = wards["population"].sum()
+    per_10k = len(pois) / people * 10_000
+    cafes = int((pois["format"] == "cafe").sum())
     return [
-        Check("catchments", matched, len(localities), shown=f"{matched} of {len(localities)} localities"),
-        Check("population", populated, len(localities), shown=f"{people / 1e6:.2f}M people, none empty"
-              if populated == len(localities) else f"{populated} of {len(localities)} localities have people"),
+        Check("outlets", len(pois) > MIN_POIS,
+              f"{len(pois):,} in wards; {placement['outside']} outside every ward, {placement['in_two_wards']} in two"),
+        Check("per 10k", PER_10K_BAND[0] <= per_10k <= PER_10K_BAND[1],
+              f"{per_10k:.2f} food and drink outlets per 10,000 residents (allowed {PER_10K_BAND[0]}-{PER_10K_BAND[1]})"),
+        Check("cafes", cafes >= MIN_CAFES, f"{cafes} (at least {MIN_CAFES})"),
     ]
 
 
 def check_scores(scored: pd.DataFrame) -> list[Check]:
-    checks = [Check("scored", int(scored["scored"].sum()), EXPECTED["scored"], shown=_scored_note(scored))]
-    for category in CATEGORIES:
-        top = ranked(scored, category).head(3)
-        shown = ", ".join(f"{name} {value:.1f}" for name, value in top.items())
-        checks.append(Check(f"top {LABELS[category]}", list(top.index), EXPECTED["top3"][category], shown))
-    return checks
-
-
-def _scored_note(scored: pd.DataFrame) -> str:
-    return f"{int(scored['scored'].sum())} of {len(scored)} localities"
-
-
-def check_v2(scored: pd.DataFrame) -> list[Check]:
-    """Every v2 score must be a real number in [-100, 100]; low confidence is counted, not hidden."""
-    columns = [f"{c}_score" for c in CATEGORIES]
-    values = scored[columns].to_numpy(dtype=float)
+    values = scored[[f"{c}_score" for c in CATEGORIES]].to_numpy(dtype=float)
     valid = int((np.isfinite(values) & (np.abs(values) <= 100)).sum())
     low = int(scored["low_confidence"].sum())
     return [
-        Check("scores v2", valid, values.size, shown=f"{valid} of {values.size} finite and within ±100"),
-        Check("low conf.", low, low, shown=f"{low} of {len(scored)} localities have under 4 outlets"),
+        Check("scores", valid == values.size, f"{valid} of {values.size} finite and within ±100"),
+        Check("low conf.", True, f"{low} of {len(scored)} wards have under 4 outlets"),
     ]
-
-
-def check_menu(types: pd.Series) -> list[Check]:
-    other = float((types == "Other").mean())
-    return [Check("menu other", other < MAX_OTHER_MENU, True, shown=f"{other:.1%} of outlets (limit {MAX_OTHER_MENU:.0%})")]
 
 
 def check_sentences(sentences: pd.Series) -> list[Check]:
     """A "{" left in a sentence means a template slot was never filled."""
-    unfilled = int(sentences.str.contains(r"[{}]").sum())
-    empty = int((sentences.str.len() == 0).sum())
-    return [Check("sentences", unfilled + empty, 0, shown=f"{len(sentences)} written, none with unfilled slots"
-                  if unfilled + empty == 0 else f"{unfilled} unfilled, {empty} empty")]
+    bad = int((sentences.str.contains(r"[{}]") | (sentences.str.len() == 0)).sum())
+    return [Check("sentences", bad == 0,
+                  f"{len(sentences)} written, none with unfilled slots" if bad == 0 else f"{bad} unfilled or empty")]
