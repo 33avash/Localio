@@ -11,7 +11,7 @@ import logging
 
 import httpx
 
-from localio_api.facts import FORMATS, LENSES
+from localio_api.facts import FORMATS, LENSES, money
 from localio_api.plan import REFUSAL, Plan
 
 log = logging.getLogger("localio.ask")
@@ -23,6 +23,7 @@ INSTRUCTIONS = (
     "You answer questions about where to open a cafe or quick-service restaurant (QSR) in Pune. "
     "Use only the facts given below; never add numbers or places that aren't in them. "
     "Answer in at most three short sentences, plainly, with the figures that matter. "
+    "Money figures are projections at default assumptions: give them as ranges, never as a single number. "
     "List in 'cited' exactly the locality names your answer relies on, spelled as in the facts."
 )
 SCHEMA = {
@@ -91,18 +92,16 @@ def empty(plan: Plan) -> str:
 
 
 def _estimate(plan: Plan) -> str:
-    """The leader's footfall estimate for the format asked about. The locality's
-    own recommendation might favour the other format, so it isn't used here."""
-    if not plan.category:
-        return ""
+    """The leader's capacity band. The ward's own recommendation might favour
+    the other format, so it isn't used here."""
     leader = plan.localities[0]
-    one = FORMATS[plan.category][0]
-    estimate = leader.properties["categories"][plan.category]["footfall"]
-    return f"A new {one} in {leader.name} would collect about {estimate['reviews']:,} reviews " \
-           f"(80% range {estimate['low']:,} to {estimate['high']:,})."
+    low, mid, high = leader.properties["capacity"]["multiplier"]
+    return f"{leader.name}'s surroundings support {mid:.1f} times the city's median ward " \
+           f"(80% range {low:.1f} to {high:.1f})."
 
 
 def _about(loc, plan: Plan) -> str:
     p = loc.properties
     counts = ", ".join(f"{p['categories'][c]['count']} {FORMATS[c][1]}" for c in FORMATS)
-    return f"{loc.name} has {p['population']:,} residents and {counts}. {p['recommendation']}"
+    money_line = money(p, plan.category or "cafe")
+    return f"{loc.name} has {p['population']:,} residents and {counts}. {p['recommendation']} {money_line}"

@@ -1,34 +1,60 @@
-"""The whole pipeline, as `python -m localio` runs it."""
+"""The whole pipeline, as `python -m localio` runs it, against PostGIS."""
 
-import pandas as pd
+import csv
+import json
+import shutil
 
 from localio.__main__ import main
 
-OUTPUTS = ("pois.geojson", "localities.geojson", "model_report.json")
+OUTPUTS = ("pois.geojson", "localities.geojson", "model_report.json", "economics.json")
 
 
-def _run(monkeypatch, tmp_path, seed, catchments):
-    monkeypatch.setenv("LOCALIO_INPUT", str(seed))
-    monkeypatch.setenv("LOCALIO_CATCHMENTS", str(catchments))
+def _run(monkeypatch, tmp_path, seed):
+    monkeypatch.setenv("LOCALIO_SEED", str(seed))
     monkeypatch.setenv("LOCALIO_OUTPUT", str(tmp_path / "out"))
     return main()
 
 
-def test_clean_run_writes_all_three_files(monkeypatch, tmp_path, seed_dir):
-    code = _run(monkeypatch, tmp_path, seed_dir / "pune_cafes_qsr.csv", seed_dir / "catchments.geojson")
-    assert code == 0
+def _copy_seed(seed_dir, tmp_path):
+    copy = tmp_path / "seed"
+    shutil.copytree(seed_dir, copy)
+    return copy
+
+
+def test_clean_run_writes_all_four_files(monkeypatch, tmp_path, seed_dir):
+    assert _run(monkeypatch, tmp_path, seed_dir) == 0
     assert all((tmp_path / "out" / name).is_file() for name in OUTPUTS)
+    wards = json.loads((tmp_path / "out" / "localities.geojson").read_text(encoding="utf-8"))["features"]
+    for ward in wards:
+        p = ward["properties"]
+        assert p["rent"]["tier"] in ("premium", "high", "mid", "value", "emerging")
+        for money in p["economics"].values():
+            assert money["revenue"] == sorted(money["revenue"])
+            assert money["payback"] is None or 0 < money["payback"][2] <= 120
 
 
-def test_tampered_seed_fails_and_writes_nothing(monkeypatch, tmp_path, seed_dir):
-    seed = pd.read_csv(seed_dir / "pune_cafes_qsr.csv", dtype=str)
-    tampered = tmp_path / "tampered.csv"
-    seed.iloc[5:].to_csv(tampered, index=False)
-    code = _run(monkeypatch, tmp_path, tampered, seed_dir / "catchments.geojson")
-    assert code == 1
+def test_an_oversized_ward_fails_and_writes_nothing(monkeypatch, tmp_path, seed_dir):
+    seed = _copy_seed(seed_dir, tmp_path)
+    path = seed / "ward_population.csv"
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    rows[0]["population"] = "250000"
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    assert _run(monkeypatch, tmp_path, seed) == 1
     assert not (tmp_path / "out").exists()
 
 
-def test_missing_catchments_fails(monkeypatch, tmp_path, seed_dir):
-    code = _run(monkeypatch, tmp_path, seed_dir / "pune_cafes_qsr.csv", tmp_path / "missing.geojson")
-    assert code == 1
+def test_a_missing_input_fails(monkeypatch, tmp_path, seed_dir):
+    seed = _copy_seed(seed_dir, tmp_path)
+    (seed / "osm_context.json").unlink()
+    assert _run(monkeypatch, tmp_path, seed) == 1
+    assert not (tmp_path / "out").exists()
+
+
+def test_a_missing_benchmark_file_fails(monkeypatch, tmp_path, seed_dir):
+    seed = _copy_seed(seed_dir, tmp_path)
+    (seed / "unit_economics.csv").unlink()
+    assert _run(monkeypatch, tmp_path, seed) == 1
+    assert not (tmp_path / "out").exists()

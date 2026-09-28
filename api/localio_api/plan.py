@@ -19,7 +19,7 @@ from localio_api.facts import DEFAULT_LENS, LENSES, Locality
 
 # Below this cosine similarity to every locality card, a question with no
 # locality name or domain word counts as off-topic. On tests/ask_cases.jsonl
-# the most similar off-topic question scores 0.53, so the floor sits above
+# the most similar off-topic question scores 0.55, so the floor sits above
 # it with room to spare; `python -m localio_api.evaluate` reports both sides.
 SIMILARITY_FLOOR = 0.62
 
@@ -35,7 +35,7 @@ FORMAT_WORDS = {
 }
 LENS_WORDS = {
     "competition": re.compile(r"\b(competition|competitors?|crowded|saturat\w*|fewest)\b", re.IGNORECASE),
-    "incumbents": re.compile(r"\b(weak|poorly rated|low[- ]rated|bad reviews|beatable)\b", re.IGNORECASE),
+    "gap": re.compile(r"\b(gaps?|under[- ]?served|unmet|room for|missing)\b", re.IGNORECASE),
     "footfall": re.compile(r"\b(busy|busiest|footfall|crowds?|popular|demand)\b", re.IGNORECASE),
 }
 GAP = re.compile(r"\b(no|zero|without|none|missing|gaps?|untapped|not (yet )?(any|a single))\b", re.IGNORECASE)
@@ -44,7 +44,7 @@ RANKING = re.compile(
     r"recommend\w*|good (place|spot|area)|most promising|where to)\b",
     re.IGNORECASE,
 )
-REFUSAL = "I only answer questions about where to open a cafe or QSR in Pune, using Localio's data on 51 localities."
+REFUSAL = "I only answer questions about where to open a cafe or QSR in Pune, using Localio's data on 140 Pune wards."
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ class Plan:
 
 def plan(question: str, localities: list[Locality], similarities: np.ndarray,
          category: str | None = None, lens: str | None = None) -> Plan:
-    named = [loc for loc in localities if re.search(rf"\b{re.escape(loc.name)}\b", question, re.IGNORECASE)]
+    named = [loc for loc in localities if _mentions(question, loc)]
     if not named and not DOMAIN.search(question) and similarities.max() < SIMILARITY_FLOOR:
         return Plan("refuse")
 
@@ -78,6 +78,13 @@ def plan(question: str, localities: list[Locality], similarities: np.ndarray,
 
     nearest = np.argsort(-similarities)[:3]
     return Plan("about", [localities[i] for i in nearest], category, lens)
+
+
+def _mentions(question: str, loc: Locality) -> bool:
+    """A ward counts as named if its title or any OSM place inside it appears
+    as a whole phrase ("Baner" finds the Baner Balewadi ward)."""
+    names = [loc.name.split(" (PCMC")[0], *loc.aliases]
+    return any(len(n) >= 4 and re.search(rf"\b{re.escape(n)}\b", question, re.IGNORECASE) for n in names)
 
 
 def _format(question: str) -> str | None:

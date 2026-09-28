@@ -1,7 +1,7 @@
 """Turn the pipeline's localities.geojson into facts the chat can cite.
 
-Each locality becomes one short card of plain sentences built from its
-numbers. The card is what gets embedded for retrieval and what the
+Each of the 140 wards becomes one short card of plain sentences built from
+its numbers. The card is what gets embedded for retrieval and what the
 language model is allowed to use, so an answer can only ever repeat
 figures the pipeline produced.
 """
@@ -14,9 +14,9 @@ FORMATS = {"cafe": ("cafe", "cafes"), "fast_food": ("QSR", "QSRs")}
 
 # The same three lenses as web/static/js/score.js.
 LENSES = {
-    "competition": {"name": "low competition", "weights": {"demand": 0.30, "supply": 0.55, "weakness": 0.15}},
-    "footfall": {"name": "proven footfall", "weights": {"demand": 0.60, "supply": 0.28, "weakness": 0.12}},
-    "incumbents": {"name": "weak incumbents", "weights": {"demand": 0.35, "supply": 0.30, "weakness": 0.35}},
+    "competition": {"name": "low competition", "weights": {"demand": 0.30, "supply": 0.55, "gap": 0.15}},
+    "footfall": {"name": "proven footfall", "weights": {"demand": 0.60, "supply": 0.28, "gap": 0.12}},
+    "gap": {"name": "unmet demand", "weights": {"demand": 0.35, "supply": 0.30, "gap": 0.35}},
 }
 DEFAULT_LENS = "footfall"
 
@@ -24,6 +24,7 @@ DEFAULT_LENS = "footfall"
 @dataclass(frozen=True)
 class Locality:
     name: str
+    aliases: tuple[str, ...]
     confident: bool
     properties: dict
     card: str
@@ -31,7 +32,7 @@ class Locality:
     def score(self, category: str, lens: str = DEFAULT_LENS) -> float:
         stats = self.properties["categories"][category]
         w = LENSES[lens]["weights"]
-        return 100 * (w["demand"] * stats["demand_n"] - w["supply"] * stats["supply_n"] + w["weakness"] * stats["weakness_n"])
+        return 100 * (w["demand"] * stats["demand_n"] - w["supply"] * stats["supply_n"] + w["gap"] * stats["gap_n"])
 
     def count(self, category: str) -> int:
         return self.properties["categories"][category]["count"]
@@ -44,27 +45,48 @@ def load(path: Path) -> list[Locality]:
 
 def _locality(p: dict) -> Locality:
     confident = p["status"] == "scored"
-    return Locality(p["name"], confident, p, card(p, confident))
+    return Locality(p["name"], tuple(p["aliases"]), confident, p, card(p, confident))
+
+
+def rupees(value: float) -> str:
+    """As the map writes them: ₹45k, ₹4.2L."""
+    sign, value = ("-" if value < 0 else ""), abs(value)
+    if value >= 1e5:
+        return f"{sign}₹{value / 1e5:.1f}L"
+    return f"{sign}₹{round(value / 1e3)}k" if value >= 1e3 else f"{sign}₹{round(value)}"
+
+
+def money(p: dict, category: str) -> str:
+    """The pipeline's projection at the default assumptions (a small outlet
+    of the default size, at the baseline rent)."""
+    m = p["economics"][category]
+    one = FORMATS[category][0]
+    payback = f"pays back in about {round(m['payback'][1])} months" if m["payback"] else m["payback_note"]
+    return (f"A small {one} here projects {rupees(m['revenue'][0])} to {rupees(m['revenue'][2])} revenue and "
+            f"{rupees(m['profit'][0])} to {rupees(m['profit'][2])} profit a month (p10 to p90), with rent at "
+            f"{m['rent_burden'][1]:.0%} of revenue; it {payback}.")
 
 
 def card(p: dict, confident: bool) -> str:
+    places = f" It takes in {', '.join(p['aliases'][:5])}." if p["aliases"] else ""
     sentences = [
-        f"{p['name']} is a {p['market_type'].lower()} locality with {p['population']:,} residents "
-        f"and {p['total_pois']} cafes and QSRs."
+        f"{p['name']} is {p['corporation']} ward {p['ward_number']}, a {p['market_type'].lower()} "
+        f"with {p['population']:,} residents and {p['total_pois']} food and drink outlets.{places}"
         + ("" if confident else " It has fewer than 4 outlets, so its scores are low confidence."),
     ]
     for category, (one, many) in FORMATS.items():
         stats = p["categories"][category]
-        rating = f", rated {stats['avg_rating']:.1f} stars on average" if stats["avg_rating"] is not None else ""
-        estimate = stats["footfall"]
-        sentences.append(
-            f"It has {stats['count']} {many} ({stats['per_10k']:.2f} per 10,000 residents{rating}). "
-            f"A new {one} there would collect about {estimate['reviews']:,} reviews "
-            f"(80% range {estimate['low']:,} to {estimate['high']:,})."
-        )
+        sentences.append(f"It has {stats['count']} {many} ({stats['per_10k']:.2f} per 10,000 residents).")
+    low, mid, high = p["capacity"]["multiplier"]
+    expected = round(p["total_pois"] + p["capacity"]["gap"])
+    sentences.append(f"Its surroundings support {mid:.1f} times the city's median ward (80% range {low:.1f} to "
+                     f"{high:.1f}); wards like it hold about {expected} outlets.")
+    sentences += [money(p, category) for category in FORMATS]
+    tier = f"{p['rent']['tier']} rent tier" + (" (estimated from its zone)" if p["rent"]["estimated"] else "")
+    sentences.append(f"It sits in the {tier}.")
     top_menu = sorted(p["menu"].items(), key=lambda item: -item[1])[:3]
-    sentences.append("Most common menus: " + ", ".join(f"{kind.lower()} {share:.0%}" for kind, share in top_menu) + ".")
-    sentences.append(f"{p['late_night_share']:.0%} of its outlets stay open late.")
-    sentences.append("Similar localities: " + ", ".join(p["similar"]) + ".")
+    if top_menu:
+        sentences.append("Most common menus: " + ", ".join(f"{kind.lower()} {share:.0%}" for kind, share in top_menu) + ".")
+    sentences.append("Similar wards: " + ", ".join(p["similar"]) + ".")
     sentences.append(p["recommendation"])
     return " ".join(sentences)

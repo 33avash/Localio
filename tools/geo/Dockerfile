@@ -15,8 +15,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY build_catchments.py .
+COPY fetch_osm.py build_population.py ./
 
-# data/localio (for the loader and aggregation) and seed_data/ are mounted
-# by docker-compose.yml, so the tool reads the seed exactly as the pipeline does.
-CMD ["python", "build_catchments.py"]
+# seed_data/ is mounted by docker-compose.yml; the osm and population
+# services pick which script runs.
