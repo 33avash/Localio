@@ -1,0 +1,53 @@
+# Publishes the site on every push to main, at
+# https://33avash.github.io/Localio/. The pipeline runs in the same
+# containers as locally (PostGIS + Python); the site is the static front
+# end plus the files the pipeline wrote. The chat runs in the browser, so
+# nothing else needs hosting.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the pipeline in Docker
+        # Exits 1 and writes nothing if any check fails, which stops the deploy.
+        run: docker compose run --rm data
+
+      - name: Assemble the site
+        run: |
+          mkdir -p site/data
+          cp -r web/static/. site/
+          cp output/wards.geojson output/pois.geojson output/rent.json site/data/
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
