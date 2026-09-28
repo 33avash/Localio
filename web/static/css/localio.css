@@ -41,6 +41,10 @@
      the ground behind white numerals on the map markers. */
   --accent-text: #4FA38D;
   --accent-strong: #2F7A67;
+  /* Financial signals only, never anything else: a healthy figure and a
+     flagged one. Both clear 7:1 on the panel. */
+  --pos: #A9C76E;
+  --neg: #F08A7A;
   --map-bg: #F2F1EE;
   --panel-width: 372px;
   --sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -168,7 +172,7 @@ body {
 
 .rail ol {
   display: flex;
-  gap: 20px;
+  gap: 14px;
   margin: 16px 0 0;
   padding: 0;
   list-style: none;
@@ -193,7 +197,10 @@ button.rail-step { cursor: pointer; }
 
 button.rail-step:hover { border-bottom-color: var(--line); }
 
-.rail-step.upcoming { opacity: 0.45; }
+.rail-step.upcoming { color: var(--muted); }
+
+/* Assumptions isn't a step in the flow, so it sits apart at the end. */
+.rail-aside { margin-left: auto; }
 
 /* ---- Loading and error states ---- */
 
@@ -383,7 +390,7 @@ h2:focus { outline: none; }
 .pick {
   position: relative;
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 24px 1fr auto;
   column-gap: 8px;
   row-gap: 2px;
   align-items: baseline;
@@ -430,6 +437,12 @@ h2:focus { outline: none; }
 
 .pick-name { font-weight: 500; }
 
+.pick-money {
+  font-size: 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .pick-why {
   grid-column: 2 / -1;
   color: var(--muted);
@@ -438,22 +451,37 @@ h2:focus { outline: none; }
 }
 
 
-/* ---- Legend and popups: same dark ground as the panel, no shadows ---- */
+/* ---- Legend and popups: the panel's dark ground, no heavy frame ---- */
 
 .legend {
+  width: 212px;
   padding: 10px 12px;
-  background: var(--bg);
+  background: rgba(26, 29, 33, 0.85);
   color: var(--text);
-  border: 1px solid var(--line);
+  border-radius: 4px;
   font: 400 12px/1.4 var(--sans);
 }
 
 .legend-title {
+  margin: 0 0 6px;
   font-weight: 500;
-  cursor: pointer;
 }
 
-.legend details[open] .legend-title { margin-bottom: 6px; }
+.ramp {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.ramp span { flex: 1; }
+
+.ramp-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 2px 0 8px;
+  color: var(--muted);
+}
 
 .legend ul {
   display: grid;
@@ -466,6 +494,16 @@ h2:focus { outline: none; }
 }
 
 .legend li { display: contents; }
+
+.legend summary {
+  margin-top: 8px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.legend summary:hover { color: var(--text); }
+
+.legend-breaks { margin-top: 6px !important; }
 
 .legend-toggle {
   display: flex;
@@ -490,8 +528,7 @@ h2:focus { outline: none; }
 }
 
 .swatch.hatch {
-  background: repeating-linear-gradient(45deg, #8C8A83 0 1.5px, transparent 1.5px 4px);
-  outline: 1px solid var(--line);
+  background: #E8E6E1 repeating-linear-gradient(45deg, rgba(26, 29, 33, 0.35) 0 1px, transparent 1px 4px);
 }
 
 .swatch.top-pick {
@@ -518,6 +555,19 @@ h2:focus { outline: none; }
 }
 
 .pick-marker.is-highlighted .pick-dot { transform: scale(1.15); }
+
+/* A clicked marker or ward takes focus, and Chrome would draw its square
+   focus ring on the map: the stray dark rectangle. Keyboard focus still
+   shows, on the round marker itself. */
+.leaflet-marker-icon:focus:not(:focus-visible),
+.leaflet-interactive:focus:not(:focus-visible) { outline: none; }
+
+.pick-marker:focus-visible { outline: none; }
+
+.pick-marker:focus-visible .pick-dot {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .pick-dot { transition: none; }
@@ -614,7 +664,7 @@ h2:focus { outline: none; }
 
   /* Rows flow inline so the legend doesn't cover a third of a small map. */
   .legend {
-    max-width: 230px;
+    width: 180px;
     padding: 8px 10px;
     font-size: 11px;
   }
@@ -635,6 +685,25 @@ h2:focus { outline: none; }
     width: 10px;
     height: 10px;
   }
+
+  /* On a phone only the strip shows until the legend is opened, so it
+     never covers the numbered markers. */
+  .legend { width: 150px; }
+
+  .legend .legend-keys,
+  .legend .legend-toggle { display: none; }
+
+  .legend:has(details[open]) .legend-keys { display: grid; }
+
+  .legend:has(details[open]) .legend-toggle { display: flex; }
+
+  .legend summary { margin-top: 2px; }
+
+  .legend-toggle { margin-top: 6px; padding-top: 6px; }
+
+  .rail ol { gap: 12px; }
+
+  .hero { font-size: 32px; }
 }
 
 /* ---- Shortlist filters and the empty state ---- */
@@ -646,6 +715,17 @@ h2:focus { outline: none; }
   color: var(--muted);
   font-size: 13px;
 }
+
+.filters summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.filters summary:hover { color: var(--text); }
+
+.filters[open] summary { margin-bottom: 6px; }
+
+.filters .filter + .filter { margin-top: 6px; }
 
 .filter {
   display: flex;
@@ -732,16 +812,26 @@ h2:focus { outline: none; }
   font-size: 13px;
 }
 
-.drawer-flag {
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid var(--line);
+.chip-type,
+.chip-flag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.chip-flag {
+  margin: 0 0 0 6px;
+  color: var(--muted);
 }
 
 .drawer-section {
-  padding: 16px 0;
+  padding: 18px 0;
   border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .drawer-section p { margin: 0 0 8px; }
@@ -749,16 +839,42 @@ h2:focus { outline: none; }
 .drawer-section p:last-child { margin-bottom: 0; }
 
 .drawer h3 {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Three tiers of type: the hero money figure, body figures at 15-16px
+   under a 12px label, and small print for sources and caveats. */
+.hero {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.hero .num { font-size: 1em; }
+
+.hero-unit {
+  margin-left: 4px;
+  font-size: 15px;
+  opacity: 0.6;
+}
+
+.hero-range {
+  margin: 4px 0 16px !important;
+  font-size: 13px;
+  opacity: 0.6;
 }
 
 .figures {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 14px 16px;
   margin: 0;
 }
 
@@ -769,8 +885,58 @@ h2:focus { outline: none; }
 
 .figures dd {
   margin: 2px 0 0;
-  font-size: 18px;
+  font-size: 16px;
 }
+
+.figures .range {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.figures .caveat {
+  color: var(--neg);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.strong { font-weight: 500; }
+
+.pos { color: var(--pos); }
+
+.neg { color: var(--neg); }
+
+.assumed {
+  margin: 14px 0 0 !important;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assumed .text-button { font-size: 12px; }
+
+.sub {
+  margin: 12px 0 6px !important;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sub:first-of-type { margin-top: 0 !important; }
+
+.body-text { font-size: 14px; }
+
+.drawer-similar { padding: 20px 0 4px; }
+
+.drawer-foot {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.drawer-foot p { margin: 0 0 6px; }
 
 .versus {
   display: block;
@@ -835,11 +1001,11 @@ h2:focus { outline: none; }
 
 .chip:hover { border-color: var(--muted); }
 
-/* The conclusion reads last and largest. */
+/* The recommendation is the drawer's conclusion: large, with room above. */
 .verdict {
-  margin: 20px 0 0;
-  font-size: 17px;
-  line-height: 1.45;
+  margin: 28px 0 0;
+  font-size: 18px;
+  line-height: 1.5;
 }
 
 .formats,
@@ -1063,3 +1229,152 @@ h2:focus { outline: none; }
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ---- The money: the shortlist's insight and the Assumptions tab ---- */
+
+.insight {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  background: #20242A;
+  border-left: 2px solid var(--accent);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.insight p { margin: 0; }
+
+.insight-label {
+  margin-bottom: 4px !important;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.note.tight { margin: 0 0 12px; }
+
+.field {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.field input {
+  width: 128px;
+  padding: 8px 10px;
+  background: #20242A;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font: 500 15px/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field input[aria-invalid="true"] { border-color: var(--neg); }
+
+.field-unit {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field-source {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: help;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented button {
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.segmented button:hover { border-color: var(--muted); }
+
+.segmented [aria-checked="true"] {
+  background: #20242A;
+  border-color: var(--accent);
+}
+
+.secondary.compact {
+  width: auto;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.assume-results {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.assume-results h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.assume-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.assume-list li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.assume-name { font-weight: 500; }
+
+.assume-profit {
+  font-size: 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.assume-detail {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.method-table.sources td:last-child {
+  text-align: left;
+  font-size: 12px;
+}
+
+.method-table a { color: var(--text); }
+
+.basis { color: var(--muted); }
+
+.formula li { margin-bottom: 2px; }

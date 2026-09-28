@@ -1,8 +1,10 @@
-import { escapeHtml, num } from "./format.js";
+import { escapeHtml, num, percent, rupees } from "./format.js";
 
 // "How it works": what each model does, how it was checked, its real
-// numbers and what it can't do, read from the pipeline's model_report.json.
-export function methodHtml(report) {
+// numbers and what it can't do, read from the pipeline's model_report.json,
+// then the money layer's formulas with every constant's source, read from
+// economics.json.
+export function methodHtml(report, econ) {
   if (!report) {
     return `
       ${head()}
@@ -50,7 +52,57 @@ export function methodHtml(report) {
       <p>Wards come from DataMeet's 2012 boundaries and every outlet is placed by point-in-polygon in PostGIS.
         Menu types come from OSM cuisine tags and name keywords. The score is a fixed formula; the lenses only change
         its weights.</p>
+    </section>
+    ${econ ? moneyMethod(econ) : ""}`;
+}
+
+// The unit economics written out, then every constant with its basis and
+// source, so nothing in a projection is unexplained.
+function moneyMethod(econ) {
+  const rows = Object.values(econ.sources).map((b) => `
+    <tr>
+      <th scope="row">${escapeHtml(b.key.replaceAll("_", " "))}</th>
+      <td>${num(value(b.low, b.unit))}${b.high !== b.low ? `–${num(value(b.high, b.unit))}` : ""}</td>
+      <td>${b.url ? `<a href="${escapeHtml(b.url)}" target="_blank" rel="noopener">${escapeHtml(b.source)}</a>`
+        : escapeHtml(b.source)}${b.basis === "published" ? "" : ` <span class="basis">(${escapeHtml(b.basis)})</span>`}</td>
+    </tr>`);
+  const tiers = Object.entries(econ.rent.tiers).map(([tier, t]) => `<li>${escapeHtml(tier)}: ${num(`${t.multiplier}×`)}
+    ${t.streets.length ? `(${t.streets.map((st) => `${escapeHtml(st.street)} ₹${st.rent_psf}`).join(", ")})` : "(no published street)"}</li>`);
+  const fixed = Object.entries(econ.formats).map(([key, f]) => `${escapeHtml(key.replace("_", " "))} ${num(rupees(f.fixed))}`);
+  return `
+    <section class="drawer-section">
+      <h3>3. The money: unit economics, not a model</h3>
+      <p>For each ward and format, every figure is a p10–p90 range:</p>
+      <ul class="plain formula">
+        <li>revenue = format baseline × footfall × competition</li>
+        <li>footfall = capacity multiplier^${num(econ.footfall.elasticity)}, kept within ${num(econ.footfall.clip[0])}–${num(econ.footfall.clip[1])}×</li>
+        <li>competition = ((1 + city per 10k) ÷ (1 + ward per 10k))^${num(econ.competition.elasticity)}, within
+          ${num(econ.competition.clip[0])}–${num(econ.competition.clip[1])}×</li>
+        <li>rent = baseline ₹/sq ft × rent tier × sq ft</li>
+        <li>costs = rent + (food ${num(percent(econ.rates.food_cost, 1))} + staff ${num(percent(econ.rates.staff))}
+          + royalty) × revenue + fixed</li>
+        <li>profit = revenue − costs; payback = setup ÷ profit</li>
+      </ul>
+      <p>No payback is shown when the p10 profit isn't positive, or when payback would run past
+        ${num(econ.payback_cap)} months. Rent burden above ${num(percent(econ.rent.flag))} of revenue is flagged.</p>
+      <p>Rent tiers are each tier's mean published rent over the mid tier's:</p>
+      <ul class="plain">${tiers.join("")}</ul>
+      <p class="note">Fixed costs have no published figure. They are set so a mid-tier ward at the default size and rent
+        earns the published net-margin midpoint: ${fixed.join(", ")} a month.</p>
+      <table class="method-table sources">
+        <thead><tr><td></td><th scope="col">Value</th><th scope="col">Source</th></tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>
+      <p class="note">Anything marked as an assumption has no published source. The projections are directional
+        and not investment advice.</p>
     </section>`;
+}
+
+function value(v, unit) {
+  if (unit.startsWith("INR/month") || unit === "INR") return rupees(v);
+  if (unit === "share of revenue") return percent(v);
+  if (unit.startsWith("INR/sq ft")) return `₹${v}`;
+  return String(v);
 }
 
 function head() {

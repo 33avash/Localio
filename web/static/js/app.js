@@ -1,9 +1,10 @@
 import { drawerHtml } from "./drawer.js";
+import { defaults } from "./economics.js";
 import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
 import { methodHtml } from "./method.js";
 import { animateScores } from "./motion.js";
-import { MAX_OPTIONS, renderLoadError, renderPanel, STEPS } from "./panel.js";
+import { ASSUMPTIONS, assumptionResults, MAX_OPTIONS, renderLoadError, renderPanel, STEPS } from "./panel.js";
 import { LENSES, rank } from "./score.js";
 import { enableSheet } from "./sheet.js";
 
@@ -34,16 +35,18 @@ const map = createMap(document.getElementById("map"), {
 
 // A failed load says so in the panel, where people are looking, rather
 // than leaving a blank map and an error in the console. The model report
-// only feeds "How it works", so the app runs without it.
+// only feeds "How it works", so the app runs without it; every money
+// figure needs economics.json.
 async function loadData() {
   try {
-    const [pois, localities, report] = await Promise.all([
+    const [pois, localities, econ, report] = await Promise.all([
       getJson("data/pois.geojson"),
       getJson("data/localities.geojson"),
+      getJson("data/economics.json"),
       getJson("data/model_report.json").catch(() => null),
     ]);
     if (!pois.features?.length || !localities.features?.length) throw new Error("The GeoJSON files are empty.");
-    return { pois: pois.features, localities: localities.features, meta: localities.meta, report };
+    return { pois: pois.features, localities: localities.features, meta: localities.meta, econ, report };
   } catch (error) {
     renderLoadError(regions.body, error.message);
     return null;
@@ -52,11 +55,22 @@ async function loadData() {
 
 const data = await loadData();
 
+// Assumptions carried in the URL hash, as ?param=value.
+const HASH_KEYS = { size: "size", sqft: "sqft", rent: "rent_psf", setup: "setup", margin: "target_margin" };
+
 const state = {
-  ...readHash(),
+  ...(data ? readHash() : { step: 1, category: null, lens: null, assumptions: {} }),
   filters: { maxCompetitors: null, includeLow: false },
   conversation: { messages: [], pending: false, draft: "" },
 };
+
+// Assumptions are kept per format (a cafe's sq ft isn't a QSR's) and start
+// from the sourced defaults in economics.json.
+function inputs() {
+  if (!state.category) return null;
+  state.assumptions[state.category] ??= defaults(data.econ, state.category);
+  return state.assumptions[state.category];
+}
 let shown = { ranking: [], lens: null, scores: new Map(), widths: new Map() };
 let returnFocus = null;
 // Matches the sheet's height transition in localio.css.
@@ -76,6 +90,13 @@ const actions = {
     closeDrawer();
     map.resetView();
   },
+  // A new format size brings its own sourced size and setup cost; the rent
+  // and margin someone typed carry over.
+  size: (value) => {
+    const { rent_psf, target_margin } = inputs();
+    state.assumptions[state.category] = { ...defaults(data.econ, state.category, value), rent_psf, target_margin };
+  },
+  "reset-assumptions": () => { state.assumptions[state.category] = defaults(data.econ, state.category); },
 };
 
 // Controls that open or close the drawer don't change the flow, so they
@@ -84,7 +105,7 @@ const drawerActions = {
   pick: (value) => openLocality(shown.ranking[Number(value)].feature.properties.name, { fly: true }),
   "open-locality": (value) => openLocality(value, { fly: true }),
   "close-drawer": () => closeDrawer(),
-  method: () => openDrawer(methodHtml(data?.report)),
+  method: () => openDrawer(methodHtml(data?.report, data?.econ)),
   ask: (value) => send(value),
 };
 
@@ -97,6 +118,7 @@ panel.addEventListener("click", (event) => {
     return;
   }
   const previousStep = state.step;
+  if (control.hasAttribute("data-close-drawer")) closeDrawer();
   actions[action](value);
   render();
   restoreFocus(control, state.step !== previousStep);
@@ -118,7 +140,29 @@ panel.addEventListener("keydown", (event) => {
 
 panel.addEventListener("input", (event) => {
   if (event.target.id === "ask-input") state.conversation.draft = event.target.value;
+  if (event.target.dataset.assume) assume(event.target);
 });
+
+// Typing in an assumption recomputes the figures under it straight away.
+// Only the results re-render, so the field keeps focus and caret. A value
+// that isn't a usable number is marked and ignored until it is.
+const ASSUME = {
+  sqft: (v) => ({ sqft: v }),
+  rent_psf: (v) => ({ rent_psf: v }),
+  setup_lakh: (v) => ({ setup: Math.round(v * 1e5) }),
+  margin_pct: (v) => ({ target_margin: v / 100 }),
+};
+
+function assume(field) {
+  const value = Number(field.value);
+  const ok = field.value.trim() !== "" && Number.isFinite(value) && value >= Number(field.min)
+    && value <= Number(field.max);
+  field.setAttribute("aria-invalid", String(!ok));
+  if (!ok) return;
+  Object.assign(inputs(), ASSUME[field.dataset.assume](value));
+  document.getElementById("assume-results").innerHTML = assumptionResults(viewState(), viewData());
+  writeHash();
+}
 
 panel.addEventListener("change", (event) => {
   const filter = event.target.closest("[data-filter]");
@@ -129,19 +173,39 @@ panel.addEventListener("change", (event) => {
   panel.querySelector(`[data-filter="${filter.dataset.filter}"]`)?.focus();
 });
 
+// The folded filters stay as the user left them across re-renders.
+panel.addEventListener("toggle", (event) => {
+  if (event.target.matches("details.filters")) state.filters.open = event.target.open;
+}, true);
+
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !drawer.hidden) closeDrawer();
 });
 
-function render() {
-  const ranking = state.step >= 3 ? shortlist(state.filters) : [];
-  renderPanel(regions, state, {
+// What the panel views read: the state with the current assumptions, and
+// the data with the ranking. Assumptions reuses the shortlist's lens, or
+// proven footfall if none is picked yet.
+function viewState() {
+  return { ...state, inputs: inputs() };
+}
+
+function viewData() {
+  const ranked = state.category && state.step >= 3 && (state.lens || state.step === ASSUMPTIONS);
+  const ranking = ranked ? shortlist(state.filters, state.lens ?? "footfall") : [];
+  return {
     meta: data.meta,
+    econ: data.econ,
     localities: data.localities,
     ranking,
     empty: state.step === 3 && !ranking.length ? emptyExplanation() : null,
     conversation: state.conversation,
-  });
+  };
+}
+
+function render() {
+  const view = viewData();
+  const { ranking } = view;
+  renderPanel(regions, viewState(), view);
   map.render({
     step: state.step,
     category: state.category,
@@ -223,8 +287,8 @@ function renderChat() {
   regions.body.scrollTop = regions.body.scrollHeight;
 }
 
-function shortlist({ maxCompetitors, includeLow }) {
-  const all = rank(data.localities, state.category, state.lens, { includeLow });
+function shortlist({ maxCompetitors, includeLow }, lens = state.lens) {
+  const all = rank(data.localities, state.category, lens, { includeLow });
   if (maxCompetitors === null) return all;
   return all.filter(({ feature }) => feature.properties.categories[state.category].count <= maxCompetitors);
 }
@@ -253,6 +317,8 @@ function openLocality(name, { fly = false } = {}) {
     category: state.category,
     lens: state.lens,
     meta: data.meta,
+    econ: data.econ,
+    inputs: inputs(),
     rank: rankOf(feature),
   }));
   map.select(name);
@@ -297,21 +363,42 @@ function restoreFocus(control, stepChanged) {
   (regions.body.querySelector(selector) ?? panel.querySelector(selector))?.focus();
 }
 
-// The URL hash mirrors the flow (#shortlist/qsr/footfall), so a shortlist
-// can be reloaded or shared.
+// The URL hash mirrors the flow and any changed assumption
+// (#shortlist/qsr/footfall?sqft=450&rent=160), so a shortlist can be
+// reloaded or shared exactly as it looked.
 function readHash() {
-  const [stepName, slug, lens] = decodeURIComponent(location.hash.slice(1)).split("/");
+  const [path, query = ""] = decodeURIComponent(location.hash.slice(1)).split("?");
+  const [stepName, slug, lens] = path.split("/");
   const category = Object.keys(CATEGORIES).find((key) => CATEGORIES[key].slug === slug) ?? null;
   const knownLens = Object.hasOwn(LENSES, lens ?? "") ? lens : null;
   let step = Math.max(1, STEPS.findIndex((name) => name.toLowerCase() === stepName) + 1);
-  if (!category) step = 1;
-  else if (step >= 3 && !knownLens) step = 2;
-  return { step, category, lens: knownLens };
+  if (step !== ASSUMPTIONS && !category) step = 1;
+  else if (step >= 3 && step !== ASSUMPTIONS && !knownLens) step = 2;
+  return { step, category, lens: knownLens, assumptions: category ? { [category]: readAssumptions(category, query) } : {} };
 }
 
+function readAssumptions(category, query) {
+  const params = new URLSearchParams(query);
+  const sizes = data.econ.sizes[category];
+  const values = defaults(data.econ, category, sizes.includes(params.get("size")) ? params.get("size") : sizes[0]);
+  for (const [param, key] of Object.entries(HASH_KEYS)) {
+    const value = Number(params.get(param));
+    if (param !== "size" && params.has(param) && Number.isFinite(value) && value > 0) values[key] = value;
+  }
+  return values;
+}
+
+// Only what differs from the defaults goes in the hash.
 function writeHash() {
   const parts = [STEPS[state.step - 1].toLowerCase(), CATEGORIES[state.category]?.slug, state.lens];
-  const hash = state.category ? `#${parts.filter(Boolean).join("/")}` : "";
+  let hash = state.category || state.step === ASSUMPTIONS ? `#${parts.filter(Boolean).join("/")}` : "";
+  if (state.category) {
+    const current = inputs();
+    const base = defaults(data.econ, state.category, current.size);
+    const changed = Object.entries(HASH_KEYS).filter(([param, key]) => (param === "size"
+      ? current.size !== data.econ.sizes[state.category][0] : current[key] !== base[key]));
+    if (changed.length) hash += `?${changed.map(([param, key]) => `${param}=${current[key]}`).join("&")}`;
+  }
   history.replaceState(null, "", hash || location.pathname);
 }
 

@@ -15,11 +15,14 @@ const COLORS = {
   other: "#6B6E73",
 };
 
-// Outlets per 10,000 residents, five quantile classes in a warm ramp kept
-// well away from the teal accent, so "crowded" never reads as "recommended".
-// Class 0 (none yet) is a neutral grey rather than the bottom of the ramp.
-const DENSITY = ["#D6D4CF", "#F6E4C1", "#EDC486", "#E09A55", "#C66A34", "#8F4322"];
+// Outlets per 10,000 residents, five quantile classes. The ramp runs pale
+// sand, amber, burnt orange to deep rust, changing lightness and chroma
+// together so neighbouring classes stay apart, and it stays well away from
+// the teal accent, so "crowded" never reads as "recommended". Class 0
+// (none yet) is a neutral grey rather than the bottom of the ramp.
+export const DENSITY = ["#D9D7D2", "#F6E3B4", "#EDB65A", "#D9782C", "#A94A1C", "#662611"];
 const ACCENT = "#3D8F7B";
+const ACCENT_STRONG = "#2F7A67";
 
 const POPUP = { className: "localio-popup", minWidth: 240, maxWidth: 290 };
 
@@ -71,9 +74,8 @@ export function createMap(element, { cartoKey, onSelect }) {
   let selected = null;
   let lastView = null;
   let outletsChoice = null;
-  // On a phone the legend would cover a third of the map, so it starts
-  // folded down to its title there. Whatever the user picks then sticks.
-  let legendOpen = !window.matchMedia("(max-width: 859px)").matches;
+  // The full breaks start folded; whatever the user picks then sticks.
+  let legendOpen = false;
 
   const legend = L.control({ position: "bottomright" });
   legend.onAdd = () => {
@@ -234,9 +236,10 @@ export function createMap(element, { cartoKey, onSelect }) {
       const shown = map.containerPointToLatLng(points[i]);
       marker.setLatLng(shown);
       if (map.latLngToContainerPoint(marker.anchor).distanceTo(points[i]) < 2) return;
-      L.polyline([marker.anchor, shown], { color: "#1A1D21", weight: 1, opacity: 0.7, interactive: false }).addTo(leaders);
-      L.circleMarker(marker.anchor, { radius: 2, stroke: false, fillColor: "#1A1D21", fillOpacity: 0.8, interactive: false })
-        .addTo(leaders);
+      L.polyline([marker.anchor, shown], { color: ACCENT_STRONG, weight: 1, opacity: 0.9, interactive: false }).addTo(leaders);
+      L.circleMarker(marker.anchor, {
+        radius: 2.5, color: "#FFFFFF", weight: 1, fillColor: ACCENT_STRONG, fillOpacity: 1, interactive: false,
+      }).addTo(leaders);
     });
   }
   map.on("zoomend", spreadPicks);
@@ -277,7 +280,7 @@ function areaLabel(locality, category) {
 function plainLabel(locality, category) {
   const p = locality.properties;
   const value = category ? p.categories[category].per_10k : p.total_per_10k;
-  const what = category ? CATEGORIES[category].many : "cafes and QSRs";
+  const what = category ? CATEGORIES[category].many : "food and drink outlets";
   return `${value.toFixed(2)} ${what} per 10,000 residents`;
 }
 
@@ -294,32 +297,39 @@ function ensureHatchPattern(map) {
   svg.insertAdjacentHTML("afterbegin", `
     <defs>
       <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <line x1="0" y1="0" x2="0" y2="6" stroke="#4A4F57" stroke-width="1.2" stroke-opacity="0.55"></line>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#1A1D21" stroke-width="0.8" stroke-opacity="0.12"></line>
       </pattern>
     </defs>`);
 }
 
+// A compact strip with the range's ends, the two marks that aren't
+// colours (top 5 and the hatch), and the full breaks one click away.
 function legendHtml(view, outletsOn, open) {
   const { category, meta, picks } = view;
   const ranges = meta.density_ranges[category ?? "total"];
-  const classes = [5, 4, 3, 2, 1].filter((c) => ranges[c]).map((c) => {
+  const present = [0, 1, 2, 3, 4, 5].filter((c) => ranges[c]);
+  const top = Math.max(...present);
+  const strip = present.map((c) => `<span style="background:${DENSITY[c]}"></span>`).join("");
+  const breaks = [5, 4, 3, 2, 1].filter((c) => ranges[c]).map((c) => {
     const [low, high] = ranges[c];
     return legendRow(swatch(DENSITY[c]), num(low === high ? low : `${low}–${high}`));
   });
-  const rows = [
-    ...(picks.length ? [legendRow('<span class="swatch top-pick"></span>', "Your top 5")] : []),
-    ...classes,
-    ...(ranges[0] ? [legendRow(swatch(DENSITY[0]), "None yet")] : []),
-    legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_pois_to_score)} outlets, low confidence`),
-  ];
-  const what = category ? CATEGORIES[category].many : "cafes and QSRs";
+  if (ranges[0]) breaks.push(legendRow(swatch(DENSITY[0]), "None yet"));
+  const what = category ? CATEGORIES[category].many : "food and drink outlets";
   return `
+    <p class="legend-title">${what[0].toUpperCase() + what.slice(1)} per 10k residents</p>
+    <div class="ramp" role="img" aria-label="Colour scale from ${ranges[0] ? "none" : ranges[present[0]][0]} to ${ranges[top][1]}">${strip}</div>
+    <p class="ramp-ends"><span>${ranges[0] ? "none" : num(ranges[present[0]][0])}</span><span>${num(ranges[top][1])}</span></p>
+    <ul class="legend-keys">
+      ${picks.length ? legendRow('<span class="swatch top-pick"></span>', "Your top 5") : ""}
+      ${legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_pois_to_score)} outlets: low confidence`)}
+    </ul>
     <details ${open ? "open" : ""}>
-      <summary class="legend-title">${what[0].toUpperCase() + what.slice(1)} per 10,000 residents</summary>
-      <ul>${rows.join("")}</ul>
-      <label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
-        Show outlets</label>
-    </details>`;
+      <summary>All breaks</summary>
+      <ul class="legend-breaks">${breaks.join("")}</ul>
+    </details>
+    <label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
+      Show outlets</label>`;
 }
 
 function swatch(color) {

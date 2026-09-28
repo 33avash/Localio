@@ -1,5 +1,3 @@
-import { CATEGORIES, counted, num } from "./format.js";
-
 // Each lens re-weights the same three normalized components the pipeline
 // ships, so switching lenses re-ranks instantly with no request.
 export const LENSES = {
@@ -40,35 +38,10 @@ export function rank(localities, category, lens, { includeLow = false } = {}) {
 // The pipeline's recommendation sentence uses the same line.
 const CROWDED = 1.5;
 
-// One line per pick, built from that ward's own numbers. It leads with
-// whichever term adds the most to the score under the current lens, and
-// every word in it ("thin", "strong") is backed by a threshold.
-export function rationale(properties, category, lens, { cityPer10k }) {
-  const { weights } = LENSES[lens];
-  const stats = properties.categories[category];
-  const outlets = `${num(properties.total_pois)} food and drink ${properties.total_pois === 1 ? "outlet" : "outlets"}`;
-  const demand = ["weak", "moderate", "strong"][third(stats.demand_n)];
-
-  if (stats.count === 0) {
-    return `${outlets} and no ${CATEGORIES[category].one} yet — ${demand} demand signal, no direct competition.`;
-  }
-  const pull = {
-    demand: weights.demand * stats.demand_n,
-    room: weights.supply * (1 - stats.supply_n),
-    gap: weights.gap * stats.gap_n,
-  };
-  const lead = Object.keys(pull).reduce((a, b) => (pull[b] > pull[a] ? b : a));
-  const expected = Math.round(properties.total_pois + properties.capacity.gap);
-  if (lead === "gap" && expected > properties.total_pois) {
-    return `${outlets} where wards like it hold about ${num(expected)} — room for more.`;
-  }
-  const competition = stats.per_10k <= cityPer10k ? "thin" : stats.per_10k <= CROWDED * cityPer10k ? "moderate" : "heavy";
-  if (competition === "thin") {
-    return `${outlets} but only ${counted(stats.count, category)} — ${demand} demand signal, thin competition.`;
-  }
-  return `${counted(stats.count, category)} among ${outlets} — ${demand} demand signal, ${competition} competition.`;
-}
-
-function third(value) {
-  return Math.min(2, Math.floor(value * 3));
+// "thin", "moderate" or "heavy": this format's outlets per 10k residents
+// against the city median.
+export function competition(properties, category, cityPer10k) {
+  const { count, per_10k: per10k } = properties.categories[category];
+  if (count === 0) return "no";
+  return per10k <= cityPer10k ? "thin" : per10k <= CROWDED * cityPer10k ? "moderate" : "heavy";
 }
