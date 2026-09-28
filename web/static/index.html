@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Localio · Where to open in Pune</title>
+  <meta name="description" content="Find Pune localities with proven footfall and thin competition for a new cafe or QSR.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/localio.css">
+</head>
+<body>
+  <aside class="panel" id="panel">
+    <button class="sheet-handle" id="sheet-handle" aria-expanded="true" aria-controls="panel-body"
+      aria-label="Hide panel"></button>
+    <header class="panel-head">
+      <p class="brand">Localio</p>
+      <p class="tagline">Where to open a cafe or QSR in Pune</p>
+    </header>
+    <div class="panel-body" id="panel-body">
+      <p class="status">Loading Pune's cafes and QSRs…</p>
+    </div>
+  </aside>
+  <main id="map" aria-label="Map of Pune"></main>
+
+  <script>
+    // Browsers block module scripts and fetch() on file://, so app.js would
+    // never run. Say so instead of loading forever.
+    if (location.protocol === "file:") {
+      document.getElementById("panel-body").innerHTML =
+        '<div class="status" role="alert"><p class="status-title">Localio has to be served over HTTP.</p>' +
+        "<p>Run <code>docker compose up</code> and open http://localhost:8080 instead of the file.</p></div>";
+    }
+  </script>
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

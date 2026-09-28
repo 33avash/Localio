@@ -1,0 +1,576 @@
+/* ---- Fonts: Plex Sans for prose, Plex Mono only for numbers ---- */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../vendor/fonts/ibm-plex-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../vendor/fonts/ibm-plex-sans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../vendor/fonts/ibm-plex-sans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../vendor/fonts/ibm-plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../vendor/fonts/ibm-plex-mono-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  --bg: #1A1D21;
+  --text: #E8E6E1;
+  --muted: #8C8A83;
+  --line: #2E3238;
+  --accent: #3D8F7B;
+  --map-bg: #F2F1EE;
+  --panel-width: 340px;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num { font-family: var(--mono); font-size: 0.92em; }
+
+/* ---- Layout: fixed panel on the left, map fills the rest ---- */
+
+.panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-width);
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+
+/* An explicit height, never a percentage of an unsized parent:
+   a zero-height container is Leaflet's most common failure. */
+#map {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--panel-width);
+  height: 100vh;
+  background: var(--map-bg);
+}
+
+/* OpenStreetMap's default style is too busy under a choropleth; greyscale
+   and soften it so it sits back like Positron does. */
+.basemap-osm .leaflet-tile-pane {
+  filter: grayscale(1) contrast(0.7) brightness(1.15);
+}
+
+#map.no-basemap { background: #E4E2DD; }
+
+.basemap-notice {
+  max-width: 220px;
+  padding: 6px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font: 400 12px/1.4 var(--sans);
+}
+
+.panel-head {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* ---- Loading and error states ---- */
+
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.status p { margin: 0 0 10px; }
+
+.status-title {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.status-detail {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.status code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  color: var(--text);
+}
+
+/* ---- Guided flow ---- */
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+button:focus-visible,
+h2:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h2:focus { outline: none; }
+
+.progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.progress li {
+  padding-top: 8px;
+  border-top: 3px solid var(--line);
+}
+
+.progress .done { border-top-color: var(--muted); }
+
+.progress .current {
+  border-top-color: var(--text);
+  color: var(--text);
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.note {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.options { border-top: 1px solid var(--line); }
+
+.option {
+  display: block;
+  width: 100%;
+  padding: 16px 12px 16px 14px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.option:hover { background: #20242A; }
+
+.option[aria-checked="true"] {
+  background: #20242A;
+  border-left-color: var(--accent);
+}
+
+.option-title {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.option-detail {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.option-weights {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 24px;
+  padding: 12px 16px;
+  background: var(--text);
+  color: var(--bg);
+  border: 0;
+  border-radius: 2px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primary:not(:disabled):hover { background: #FFFFFF; }
+
+.primary:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.text-button {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.text-button:hover { color: var(--text); }
+
+.back { margin-bottom: 12px; }
+
+/* ---- Shortlist ---- */
+
+.lens-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 20px;
+  font-size: 13px;
+}
+
+.lens-switch button {
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.lens-switch button:hover { color: var(--text); }
+
+.lens-switch [aria-checked="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.picks-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0 6px 36px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.picks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.pick {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: baseline;
+  width: 100%;
+  padding: 14px 4px 14px 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.pick:hover { background: #20242A; }
+
+.pick-rank {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.pick-name { font-weight: 500; }
+
+.pick-why {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+
+/* ---- Legend and popups: same dark ground as the panel, no shadows ---- */
+
+.legend {
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font: 400 12px/1.4 var(--sans);
+}
+
+.legend-title {
+  margin: 0 0 6px;
+  font-weight: 500;
+}
+
+.legend ul {
+  display: grid;
+  grid-template-columns: 14px auto auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li { display: contents; }
+
+.legend-value {
+  color: var(--muted);
+  text-align: right;
+}
+
+.swatch {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+}
+
+.swatch.dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 2px;
+  border: 1px solid #FFFFFF;
+}
+
+.swatch.dashed { border: 1.5px dashed var(--muted); }
+
+.swatch.top-pick {
+  background: var(--accent);
+  border-color: #FFFFFF;
+}
+
+.pick-marker {
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.localio-popup .leaflet-popup-content-wrapper,
+.localio-popup .leaflet-popup-tip {
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.localio-popup .leaflet-popup-content {
+  margin: 14px 16px;
+  font: 400 13px/1.45 var(--sans);
+}
+
+.localio-popup a.leaflet-popup-close-button { color: var(--muted); }
+.localio-popup a.leaflet-popup-close-button:hover { color: var(--text); }
+
+.localio-popup h3 {
+  margin: 0 16px 2px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.localio-popup p { margin: 0; }
+
+.localio-popup .popup-sub {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.localio-popup table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.localio-popup th,
+.localio-popup td {
+  padding: 3px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  padding-left: 14px;
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.localio-popup th[scope="row"] {
+  padding-left: 0;
+  text-align: left;
+}
+
+.localio-popup thead td,
+.localio-popup thead th { border-top: 0; }
+
+.localio-popup .chosen {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.localio-popup .popup-score {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---- Phones: map on top, panel as a bottom sheet ---- */
+
+.sheet-handle { display: none; }
+
+@media (max-width: 759px) {
+  :root { --sheet-peek: 72px; }
+
+  #map {
+    left: 0;
+    height: 55vh;
+    height: 55dvh;
+    transition: height 0.25s ease;
+  }
+
+  .panel {
+    top: auto;
+    width: 100%;
+    height: 45vh;
+    height: 45dvh;
+    border-top: 1px solid var(--line);
+    border-right: 0;
+    transition: height 0.25s ease;
+  }
+
+  .sheet-collapsed #map {
+    height: calc(100vh - var(--sheet-peek));
+    height: calc(100dvh - var(--sheet-peek));
+  }
+
+  .sheet-collapsed .panel { height: var(--sheet-peek); }
+
+  .sheet-handle {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 100%;
+    height: 20px;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .sheet-handle::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: #4A4F57;
+  }
+
+  .panel-head { padding: 0 16px 12px; }
+
+  .panel-body { padding: 16px 16px 24px; }
+
+  .progress { margin-bottom: 20px; }
+
+  .panel h2 { font-size: 20px; }
+
+  /* Rows flow inline so the legend doesn't cover a third of a small map. */
+  .legend {
+    max-width: 230px;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .legend ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 10px;
+  }
+
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .legend .swatch {
+    width: 10px;
+    height: 10px;
+  }
+}

@@ -8,3 +8,17 @@ services:
       # between runs, and the map would quietly show stale numbers.
       - ./seed_data:/app/seed_data:ro
       - ./output:/app/output
+
+  web:
+    build: ./web
+    ports:
+      # Port 8080 taken? Run with LOCALIO_PORT=8090 docker compose up
+      - "${LOCALIO_PORT:-8080}:80"
+    environment:
+      # Optional. Set it in .env (see .env.example) to get CARTO Positron tiles.
+      LOCALIO_CARTO_KEY: ${LOCALIO_CARTO_KEY:-}
+    volumes:
+      - ./output:/srv/localio-data:ro
+    depends_on:
+      data:
+        condition: service_completed_successfully

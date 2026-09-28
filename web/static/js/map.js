@@ -1,0 +1,212 @@
+import { CATEGORIES, num } from "./format.js";
+import { localityPopup, outletPopup } from "./popups.js";
+
+const PUNE = [18.5204, 73.8567];
+const PUNE_BOUNDS = [[18.40, 73.65], [18.68, 73.98]];
+
+const OSM_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+const COLORS = {
+  cafe: "#4F79A8",
+  fast_food: "#8466B0",
+  other: "#6B6E73",
+};
+
+const SATURATION = {
+  none: "#6B6E73",
+  low: "#A8C3B8",
+  medium: "#E0B15C",
+  high: "#C9604A",
+};
+
+export function createMap(element, { cartoKey }) {
+  const map = L.map(element, {
+    center: PUNE,
+    zoom: 12,
+    minZoom: 10,
+    maxZoom: 16,
+    maxBounds: PUNE_BOUNDS,
+    maxBoundsViscosity: 1,
+  });
+  const tiles = basemap(cartoKey).addTo(map);
+  element.classList.toggle("basemap-osm", !cartoKey);
+  watchTiles(map, tiles, element);
+
+  // Leaflet measures its container once. Any later size change (the mobile
+  // sheet opening or closing, crossing the breakpoint) needs a re-measure,
+  // or tiles stop short and clicks land in the wrong place.
+  new ResizeObserver(() => map.invalidateSize()).observe(element);
+
+  // Markers only ever go into named groups, cleared on every render,
+  // so nothing accumulates across steps.
+  const outlets = L.layerGroup().addTo(map);
+  const areas = L.layerGroup().addTo(map);
+  const picks = L.layerGroup().addTo(map);
+  let pickMarkers = [];
+
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => L.DomUtil.create("div", "legend");
+  legend.addTo(map);
+
+  function render(view) {
+    map.closePopup();
+    outlets.clearLayers();
+    areas.clearLayers();
+    picks.clearLayers();
+    pickMarkers = [];
+    if (view.step === 1) drawOutlets(view);
+    else drawAreas(view);
+    if (view.step === 3) drawPicks(view);
+    legend.getContainer().innerHTML = view.step === 1 ? outletLegend(view) : areaLegend(view);
+  }
+
+  // Step 1: every POI. Once a format is picked, the other one fades to grey
+  // but stays visible, because where people already eat is the point.
+  function drawOutlets({ pois, category }) {
+    const ordered = [...pois].sort((a, b) => (a.properties.category === category) - (b.properties.category === category));
+    for (const poi of ordered) {
+      const faded = category && poi.properties.category !== category;
+      L.circleMarker(latLng(poi), {
+        radius: 4,
+        color: "#FFFFFF",
+        weight: 1,
+        opacity: faded ? 0.15 : 1,
+        fillColor: faded ? COLORS.other : COLORS[poi.properties.category],
+        fillOpacity: faded ? 0.15 : 0.75,
+      })
+        .bindPopup(() => outletPopup(poi.properties), POPUP)
+        .addTo(outlets);
+    }
+  }
+
+  // Steps 2-3: one bubble per locality, sized by how many of the chosen
+  // format it has and coloured by saturation. Dashed means too few to score.
+  // In step 3 everything but the top 5 fades back.
+  function drawAreas(view) {
+    const { localities, category } = view;
+    const shortlisted = view.step === 3;
+    const bySize = [...localities].sort((a, b) => count(b, category) - count(a, category));
+    for (const locality of bySize) {
+      if (view.picks.includes(locality)) continue;
+      const color = SATURATION[locality.properties.categories[category].saturation];
+      L.circleMarker(latLng(locality), {
+        radius: 6 + Math.sqrt(count(locality, category)) * 4.5,
+        color,
+        weight: 1.5,
+        opacity: shortlisted ? 0.2 : 1,
+        fillColor: color,
+        fillOpacity: shortlisted ? 0.1 : 0.5,
+        dashArray: locality.properties.status === "scored" ? null : "3 3",
+      })
+        .bindPopup(() => localityPopup(locality.properties, view), POPUP)
+        .addTo(areas);
+    }
+  }
+
+  // The top 5 are the one loud element on the map.
+  function drawPicks(view) {
+    pickMarkers = view.picks.map((locality, i) =>
+      L.marker(latLng(locality), {
+        icon: L.divIcon({ className: "pick-marker", html: num(i + 1), iconSize: [28, 28] }),
+        title: `${i + 1}. ${locality.properties.name}`,
+        zIndexOffset: 1000,
+      })
+        .bindPopup(() => localityPopup(locality.properties, view), POPUP)
+        .addTo(picks));
+  }
+
+  function focusPick(index) {
+    const marker = pickMarkers[index];
+    map.once("moveend", () => marker.openPopup());
+    map.flyTo(marker.getLatLng(), 14, { duration: 1.2 });
+  }
+
+  function resetView() {
+    map.setView(PUNE, 12);
+  }
+
+  return { render, focusPick, resetView };
+}
+
+const POPUP = { className: "localio-popup", minWidth: 230, maxWidth: 280 };
+
+function outletLegend({ category }) {
+  const rows = Object.keys(CATEGORIES).map((key) => {
+    const faded = category && key !== category;
+    return legendRow(`<span class="swatch dot" style="background:${faded ? COLORS.other : COLORS[key]}"></span>`,
+      CATEGORIES[key].label);
+  });
+  return `<p class="legend-title">Outlets</p><ul>${rows.join("")}</ul>`;
+}
+
+function areaLegend({ category, meta, picks }) {
+  const ranges = meta.saturation_ranges[category];
+  const tiers = ["high", "medium", "low"].map((tier) => {
+    const [low, high] = ranges[tier];
+    return legendRow(swatch(SATURATION[tier]), tier[0].toUpperCase() + tier.slice(1), num(low === high ? low : `${low}–${high}`));
+  });
+  const rows = [
+    ...(picks.length ? [legendRow('<span class="swatch top-pick"></span>', "Your top 5")] : []),
+    ...tiers,
+    legendRow(swatch(SATURATION.none), "None", num(0)),
+    legendRow('<span class="swatch dashed"></span>', `Under ${num(meta.min_pois_to_score)} outlets, not scored`),
+  ];
+  const { many } = CATEGORIES[category];
+  return `<p class="legend-title">${many[0].toUpperCase() + many.slice(1)} per locality</p><ul>${rows.join("")}</ul>`;
+}
+
+function swatch(color) {
+  return `<span class="swatch" style="background:${color}80; border-color:${color}"></span>`;
+}
+
+function legendRow(mark, label, value = "") {
+  return `<li>${mark}<span>${label}</span><span class="legend-value">${value}</span></li>`;
+}
+
+// CARTO Positron is muted enough for the data to read clearly, but since
+// September 2026 it needs a (free) key. Without one, CARTO answers with
+// placeholder images rather than errors, so we switch to OpenStreetMap
+// tiles instead and greyscale them in CSS.
+function basemap(cartoKey) {
+  if (cartoKey) {
+    return L.tileLayer(
+      `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(cartoKey)}`,
+      { attribution: `${OSM_ATTRIBUTION} &copy; <a href="https://carto.com/attributions">CARTO</a>` },
+    );
+  }
+  return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: OSM_ATTRIBUTION });
+}
+
+// Bad wifi shouldn't sink the demo: if tiles fail more often than they load,
+// switch to a flat background and say so once. Markers and the whole flow
+// work without a basemap.
+function watchTiles(map, tiles, element) {
+  let loaded = 0;
+  let failed = 0;
+  let noticed = false;
+  tiles.on("tileload", () => { loaded += 1; });
+  tiles.on("tileerror", () => {
+    failed += 1;
+    if (noticed || failed <= loaded) return;
+    noticed = true;
+    element.classList.add("no-basemap");
+    const notice = L.control({ position: "topright" });
+    notice.onAdd = () => {
+      const div = L.DomUtil.create("div", "basemap-notice");
+      div.setAttribute("role", "status");
+      div.textContent = "Basemap unavailable. Markers and scores still work.";
+      return div;
+    };
+    notice.addTo(map);
+  });
+}
+
+function count(locality, category) {
+  return locality.properties.categories[category].count;
+}
+
+function latLng(feature) {
+  const [lng, lat] = feature.geometry.coordinates;
+  return [lat, lng];
+}
