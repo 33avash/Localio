@@ -1,19 +1,18 @@
-"""One sentence per locality: which format fits better here, and why.
+"""One sentence per ward: which format fits better here, and why.
 
-It's the last thing in the detail drawer, so every number in it comes from
-the locality's own row. The template is filled with str.format, and the
-pipeline checks no "{" survives into the output.
+Every number in it comes from the ward's own row. The template is filled
+with str.format, and the pipeline checks no "{" survives into the output.
 """
 
 import pandas as pd
 
 LABELS = {"cafe": ("cafe", "cafes"), "fast_food": ("QSR", "QSRs")}
 CLOSE_CALL = 3.0
-# Above this multiple of the city median, a locality counts as well served.
+# Above this multiple of the city median, a ward counts as well served.
 CROWDED = 1.5
 
 LEADS = {
-    "wins": "A {best} is the better bet here: it scores {best_score} against {other_score} for a {other}.",
+    "wins": "A {best} is the better bet here: it scores {best_score} out of 100, against {other_score} for a {other}.",
     "close": "Cafe and QSR score about the same here ({cafe_score} vs {qsr_score}), so the concept matters more "
              "than the format.",
 }
@@ -22,9 +21,9 @@ REASONS = {
     "thin": " There are {best_per_10k} {best_many} per 10,000 residents, against a city median of {city_per_10k}.",
     "typical": " It has {best_per_10k} {best_many} per 10,000 residents, close to the city median of {city_per_10k}.",
     "crowded": " It's already well served, with {best_per_10k} {best_many} per 10,000 residents against a city "
-               "median of {city_per_10k}, so the case rests on footfall and ratings, not a gap.",
+               "median of {city_per_10k}, so the case rests on how busy it is, not a gap.",
 }
-LOW_CONFIDENCE = " Only {outlets} here, so treat this as a lead to check on the ground."
+LOW_CONFIDENCE = " Only {outlets} mapped here, so check on the ground before relying on it."
 
 
 def sentence(row: pd.Series, city_per_10k: dict[str, float]) -> str:
@@ -36,10 +35,10 @@ def sentence(row: pd.Series, city_per_10k: dict[str, float]) -> str:
         "best": LABELS[best][0],
         "best_many": LABELS[best][1],
         "other": LABELS[other][0],
-        "best_score": f"{scores[best]:.1f}",
-        "other_score": f"{scores[other]:.1f}",
-        "cafe_score": f"{scores['cafe']:.1f}",
-        "qsr_score": f"{scores['fast_food']:.1f}",
+        "best_score": f"{scores[best]:.0f}",
+        "other_score": f"{scores[other]:.0f}",
+        "cafe_score": f"{scores['cafe']:.0f}",
+        "qsr_score": f"{scores['fast_food']:.0f}",
         "best_per_10k": f"{per_10k:.2f}",
         "city_per_10k": f"{city_per_10k[best]:.2f}",
         "residents": f"{int(row['population']):,}",

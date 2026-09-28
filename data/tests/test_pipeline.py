@@ -6,7 +6,7 @@ import shutil
 
 from localio.__main__ import main
 
-OUTPUTS = ("pois.geojson", "localities.geojson", "model_report.json", "economics.json")
+OUTPUTS = ("pois.geojson", "wards.geojson", "rent.json")
 
 
 def _run(monkeypatch, tmp_path, seed):
@@ -21,16 +21,15 @@ def _copy_seed(seed_dir, tmp_path):
     return copy
 
 
-def test_clean_run_writes_all_four_files(monkeypatch, tmp_path, seed_dir):
+def test_clean_run_writes_all_three_files(monkeypatch, tmp_path, seed_dir):
     assert _run(monkeypatch, tmp_path, seed_dir) == 0
     assert all((tmp_path / "out" / name).is_file() for name in OUTPUTS)
-    wards = json.loads((tmp_path / "out" / "localities.geojson").read_text(encoding="utf-8"))["features"]
+    wards = json.loads((tmp_path / "out" / "wards.geojson").read_text(encoding="utf-8"))["features"]
+    assert len(wards) == 140
     for ward in wards:
         p = ward["properties"]
         assert p["rent"]["tier"] in ("premium", "high", "mid", "value", "emerging")
-        for money in p["economics"].values():
-            assert money["revenue"] == sorted(money["revenue"])
-            assert money["payback"] is None or 0 < money["payback"][2] <= 120
+        assert 0 <= p["demand"] <= 1 and "{" not in p["recommendation"]
 
 
 def test_an_oversized_ward_fails_and_writes_nothing(monkeypatch, tmp_path, seed_dir):
@@ -53,8 +52,8 @@ def test_a_missing_input_fails(monkeypatch, tmp_path, seed_dir):
     assert not (tmp_path / "out").exists()
 
 
-def test_a_missing_benchmark_file_fails(monkeypatch, tmp_path, seed_dir):
+def test_a_missing_rent_file_fails(monkeypatch, tmp_path, seed_dir):
     seed = _copy_seed(seed_dir, tmp_path)
-    (seed / "unit_economics.csv").unlink()
+    (seed / "rent_listings.csv").unlink()
     assert _run(monkeypatch, tmp_path, seed) == 1
     assert not (tmp_path / "out").exists()

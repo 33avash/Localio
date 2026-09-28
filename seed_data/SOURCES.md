@@ -1,18 +1,31 @@
-# Seed data sources
+# Seed data
 
-## pune_cafes_qsr.csv
+Every input the pipeline reads. All of it is committed, so a build never needs the network.
 
-260 cafes and QSRs across 51 Pune localities, collected through the Google Places API on 2026-09-18. It's Google Maps Platform content, used here for coursework under Google's terms. It is not covered by this repository's MIT license.
+| File | What it is | Where it comes from |
+|---|---|---|
+| `wards/` | 76 PMC and 64 PCMC ward boundaries (2012), PMC ward titles and voter rolls | [DataMeet](https://github.com/datameet/Pune_wards); see [wards/README.md](wards/README.md) |
+| `ward_population.csv` | residents per ward | `docker compose run --rm population` |
+| `osm_raw.json` | 1,979 food and drink places in the wards' bounding box | `docker compose run --rm osm` |
+| `osm_context.json` | colleges, offices, stations and place names | `docker compose run --rm osm` |
+| `rent_high_streets.csv` | prime rents for ten Pune high streets, their tier and the wards they run through | Cushman & Wakefield Pune Retail MarketBeat, Q2 2026 |
+| `rent_listings.csv` | 25 Pune shop listings, for the typical rent per sq ft | Square Yards, first page of Pune shop listings, 28 Sep 2026 |
+| `rent_benchmarks.csv` | default shop size, healthy rent share, and the emerging-tier multiplier | DineOpen; the multiplier is marked as an assumption |
 
-## catchments.geojson
+## How residents per ward are built
 
-One polygon per locality, with the number of people living in it. Built by `tools/catchments/build_catchments.py`:
+DataMeet's wards carry no Census population, and the Census 2011 ward tables use older boundaries. So each ward gets a share of its corporation's Census 2011 total:
+
+- **PMC** (3,124,458 people): shared by the 2012 voter roll. Ward 42 has no voter count and gets the PMC average.
+- **PCMC** (1,727,692 people): shared equally. There's no voter roll, and electoral wards are drawn to hold similar numbers of people.
+
+The `hrsl_people` column is Meta's HRSL population estimate for each ward. It was tried and rejected as a source (it agrees poorly with the voter rolls), and is kept only for comparison.
+
+## Refreshing the data
+
+The tools need network access and overwrite files here. The pipeline then uses the new files on its next run.
 
 ```
-docker compose run --rm catchments
+docker compose run --rm osm --refresh     # re-fetch from OpenStreetMap
+docker compose run --rm population        # rebuild residents per ward
 ```
-
-- **Shape:** the locality's Voronoi cell (the land closer to its centre than to any other locality's), cut back to within 2 km of its own outlets. OpenStreetMap has no boundary for the Pune or Pimpri-Chinchwad municipal corporations (checked 2026-09-26), so distance to outlets stands in for city limits. These are catchments, not official wards.
-- **Population:** summed from Meta's High Resolution Settlement Layer v1.5.2, 30 m cells. © Meta Platforms and CIESIN, Columbia University, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The tool reads only the Pune window of the tile over HTTP.
-
-The file is committed so the pipeline never needs a network connection. Rebuild it only if the seed's localities change.

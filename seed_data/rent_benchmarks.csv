@@ -1,0 +1,4 @@
+key,low,high,unit,basis,note,source,url,retrieved
+outlet_sqft,200,400,sq ft,published,Small QSR; Restaurant India gives the same range for a small cafe,DineOpen: How to Start a Quick Service Restaurant in India (10 Mar 2026),https://www.dineopen.com/blog/how-to-start-qsr-india.html,2026-09-28
+rent_share,0.08,0.15,share of sales,published,Healthy rent for cafes and QSRs,DineOpen: Restaurant Profit Margins in India (12 Mar 2026),https://www.dineopen.com/blog/restaurant-profit-margins-india-guide.html,2026-09-28
+emerging_multiplier,0.6,0.6,x typical rent,assumption,Rent for wards whose zone has no published high street; below the cheapest published street,Localio assumption,,2026-09-28

@@ -33,7 +33,7 @@ pipeline_exited_cleanly() {
 step "clean start"                   docker compose down --volumes --remove-orphans
 step "build, pipeline, health checks" docker compose up --build --detach --wait web api
 step "pipeline checks"               pipeline_exited_cleanly
-step "pipeline unit tests"           docker compose run --rm --no-deps data python -m pytest -q -p no:cacheprovider tests
+step "pipeline unit tests"           docker compose run --rm data python -m pytest -q -p no:cacheprovider tests
 step "api unit tests"                docker compose run --rm --no-deps api python -m pytest -q -p no:cacheprovider tests
 step "chat evaluation"               docker compose run --rm --no-deps api python -m localio_api.evaluate
 step "end-to-end and visual tests"   docker compose --profile test run --rm --build e2e

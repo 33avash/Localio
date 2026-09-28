@@ -25,21 +25,20 @@ def test_missing_osm_cache_is_a_clear_error(tmp_path, seed_dir):
 
 
 def _ward(key, geom):
-    return Ward(key, "PMC", int(key[-2:]), key, "Test", 1000, "test", 0, geom)
+    return Ward(key, "PMC", int(key[-2:]), key, "Test", 1000, "test", geom)
 
 
 def test_outlets_are_placed_by_containment_not_by_name(conn):
     wards = [_ward("PMC-01", box(73.80, 18.50, 73.81, 18.51)), _ward("PMC-02", box(73.81, 18.50, 73.82, 18.51))]
     pois = [
         {"id": "node/1", "amenity": "cafe", "format": "cafe", "name": "Cafe in PMC-02 by name only", "brand": "",
-         "cuisine": "", "opening_hours": "", "lon": 73.805, "lat": 18.505},
+         "cuisine": "", "lon": 73.805, "lat": 18.505},
         {"id": "node/2", "amenity": "cafe", "format": "cafe", "name": "", "brand": "", "cuisine": "",
-         "opening_hours": "", "lon": 73.815, "lat": 18.505},
+         "lon": 73.815, "lat": 18.505},
         {"id": "node/3", "amenity": "cafe", "format": "cafe", "name": "", "brand": "", "cuisine": "",
-         "opening_hours": "", "lon": 73.90, "lat": 18.60},
+         "lon": 73.90, "lat": 18.60},
     ]
-    context = {"places": [], "colleges": [], "offices": [], "stations": [], "classified_roads": [],
-               "road_grid": {"cell_m": 250, "cells": []}}
+    context = {"places": [], "colleges": [], "offices": [], "stations": []}
     db.load(conn, wards, pois, context)
     placement = db.assign_wards(conn)
     placed = dict(conn.execute("SELECT id, ward FROM pois ORDER BY id").fetchall())

@@ -22,7 +22,8 @@ from localio_api import facts
 from localio_api.answer import respond
 from localio_api.plan import plan
 
-DATA = Path(os.environ.get("LOCALIO_DATA", "/srv/localio-data")) / "localities.geojson"
+# The pipeline's output directory, mounted read-only.
+DATA = Path(os.environ.get("LOCALIO_DATA", "/srv/localio-data"))
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 MAX_QUESTION = 300
 RATE = (12, 60)  # questions per window, window in seconds, per client
@@ -49,9 +50,9 @@ def _unit(vectors: np.ndarray) -> np.ndarray:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    localities = facts.load(DATA)
+    wards = facts.load(DATA)
     embedder = Embedder()
-    state.update(localities=localities, embedder=embedder, cards=embedder.documents([loc.card for loc in localities]))
+    state.update(wards=wards, embedder=embedder, cards=embedder.documents([ward.card for ward in wards]))
     yield
 
 
@@ -67,7 +68,7 @@ class Ask(BaseModel):
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "localities": len(state["localities"]), "writer": "gemini" if _key() else "offline"}
+    return {"status": "ok", "wards": len(state["wards"]), "writer": "gemini" if _key() else "offline"}
 
 
 @app.post("/api/ask")
@@ -83,7 +84,7 @@ def ask(body: Ask, request: Request) -> dict:
 
     category = body.category if body.category in facts.FORMATS else None
     similarities = state["cards"] @ state["embedder"].query(question)
-    decided = plan(question, state["localities"], similarities, category, body.lens)
+    decided = plan(question, state["wards"], similarities, category, body.lens)
     return respond(question, decided, _key(), os.environ.get("LOCALIO_GEMINI_MODEL", "gemini-3.8-flash"))
 
 

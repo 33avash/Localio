@@ -34,7 +34,7 @@ def test_sentence_fills_every_slot_and_pluralises():
     text = sentence(_row(), CITY)
     assert "{" not in text and "}" not in text
     assert "no cafes yet among 12,345 residents" in text
-    assert "Only 1 outlet here" in text
+    assert "Only 1 outlet mapped here" in text
 
 
 def test_sentence_calls_a_close_race():

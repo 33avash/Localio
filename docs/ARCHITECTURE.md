@@ -1,76 +1,71 @@
 # Architecture
 
-Localio is a small multi-container pipeline. One container turns a seed table into scored GeoJSON and exits. A second serves that GeoJSON and a static map. Compose wires them together so a single `docker compose up` goes from raw CSV to a working site.
-
-## Today
+One `docker compose up` goes from committed seed files to a working site. The pipeline runs once and exits; the map and the chat then serve what it wrote.
 
 ```mermaid
 flowchart LR
-    subgraph seed["seed_data/ (committed)"]
-        csv["pune_cafes_qsr.csv<br/>260 cafes and QSRs"]
-        geo["catchments.geojson<br/>51 polygons + population"]
+    seed["seed_data/<br/>wards, residents, OSM outlets,<br/>rent figures (committed)"]
+
+    subgraph db["db · postgis/postgis · throwaway"]
+        pg[("PostGIS<br/>tmpfs, no volume")]
     end
 
-    subgraph data["data container · python:3.11-slim · runs once"]
+    subgraph data["data · python:3.11-slim · runs once"]
         direction TB
-        load["load + clean<br/>drop unplaceable rows"] --> agg["aggregate by locality"]
-        agg --> join["join catchments<br/>population, area, label point"]
-        join --> density["outlets per 10k residents<br/>quantile classes"]
-        density --> score["opportunity score<br/>demand, supply, weakness"]
-        score --> check{"validate<br/>known totals and top 3"}
+        load["load seed files"] --> join["place outlets in wards<br/>ST_Contains"]
+        join --> count["counts, per 10k residents"]
+        count --> score["busyness, competition,<br/>score, rent tier"]
+        score --> check{"checks"}
     end
 
     subgraph out["./output (bind mount)"]
-        pois["pois.geojson"]
-        locs["localities.geojson"]
+        files["wards.geojson<br/>pois.geojson<br/>rent.json"]
     end
 
-    subgraph web["web container · nginx:alpine · long-running"]
-        static["static site<br/>Leaflet, vanilla ES modules"]
-        cfg["/config.json<br/>optional CARTO key"]
+    subgraph web["web · nginx:alpine"]
+        site["map: Leaflet +<br/>plain ES modules"]
     end
 
-    subgraph api["api container · FastAPI · long-running"]
-        ask["/api/ask<br/>refuse, retrieve (fastembed),<br/>answer (Gemini or templates)"]
+    subgraph api["api · FastAPI"]
+        ask["/api/ask: refuse, retrieve,<br/>answer from ward facts"]
     end
 
-    csv --> load
-    geo --> join
-    check -- "all ok" --> pois & locs
-    check -- "any fail: exit 1, write nothing" --> stop(["web never starts"])
-    pois & locs -- "read-only mount, served at /data/" --> web
-    locs -- "read-only mount" --> api
+    seed --> load
+    load <--> pg
+    check -- "all ok" --> files
+    check -- "any fail: exit 1" --> stop(["nothing written,<br/>web and api never start"])
+    files -- "read-only" --> web & api
     web -- "proxies /api/" --> api
-    api -. "optional, with a key" .-> gemini(["Gemini Flash"])
-    web --> browser(["browser: map, drawer, chat"])
-    tiles(["basemap tiles<br/>OSM, or CARTO with a key"]) -.-> browser
-
-    tool["catchments tool<br/>profile: tools, needs network"] -. "rebuilds when localities change" .-> geo
+    web --> browser(["browser"])
+    api -. "optional key" .-> gemini(["Gemini"])
 ```
 
-### Containers
+## Containers
 
-| Service | Image | Lifetime | Role |
+| Service | Image | Runs | Job |
 |---|---|---|---|
-| `data` | `python:3.11-slim` + pandas, openpyxl | runs once, exits 0 or 1 | Load, clean, aggregate, score, validate, write GeoJSON |
-| `web` | `nginx:alpine` | long-running, port `${LOCALIO_PORT:-8080}` | Serve `web/static/`, serve `./output` at `/data/`, serve `/config.json`, proxy `/api/` |
-| `api` | `python:3.11-slim` + FastAPI, fastembed (model baked in) | long-running, healthcheck on `/api/health` | Answer chat questions from the locality facts |
-| `catchments` | `python:3.11-slim` + rasterio, shapely, pyproj | on demand, `tools` profile | Rebuild `seed_data/catchments.geojson` from HRSL population; needs network |
+| `db` | `postgis/postgis:17-3.5` | while the stack is up | Spatial joins for the pipeline. Its data lives in tmpfs, so every run starts empty. |
+| `data` | `python:3.11-slim` + pandas, shapely, psycopg | once; exits 0 or 1 | Load, join, score, check, write `./output`. |
+| `web` | `nginx:alpine` | long-running, port 8080 | Serve the site, serve `./output` at `/data/`, proxy `/api/`. |
+| `api` | `python:3.11-slim` + FastAPI, fastembed | long-running | Answer chat questions from the ward facts. |
+| `e2e` | `mcr.microsoft.com/playwright` | on demand (`test` profile) | Browser tests against `web`. |
+| `osm`, `population` | `python:3.11-slim` + requests, rasterio | on demand (`tools` profile) | Rebuild `seed_data/` from the internet. |
 
-### How the pieces connect
+## How the pieces connect
 
-- **Start order.** `web` has `depends_on: data: condition: service_completed_successfully`. If any validation check fails, `data` exits 1, writes nothing, and `web` never starts, so the site can't show numbers from a broken run.
-- **Shared output is a bind mount.** `./output` is mounted into both containers, read-write for `data` and read-only for `web`. A named volume would keep the last run's files and the map could quietly show stale numbers. For the same reason nginx sends `/data/` with `Cache-Control: no-store`.
-- **Writes are atomic.** The pipeline writes each file to a `.tmp` sibling, sets it to 0644, then renames it, so nginx never serves a half-written file.
-- **Config without a rebuild.** nginx's entrypoint runs `envsubst` on its config template at startup, so `LOCALIO_CARTO_KEY` from `.env` reaches the page at `/config.json` without baking a key into an image.
-- **The chat can't take the map down.** nginx resolves `api` per request through Docker's DNS rather than at startup, so `web` starts and serves the map even if `api` is missing. The chat then shows "isn't reachable" within about 2 seconds.
-- **Offline by default.** Leaflet and the fonts are vendored, and the population data is precomputed and committed. The only runtime network use is basemap tiles, and the map works without them.
+- **Start order.** `data` waits for `db` to be healthy. `web` and `api` wait for `data` to finish successfully, so a failed check means the site never shows bad numbers.
+- **No stale state.** The database uses tmpfs and `./output` is a bind mount, not a named volume. nginx serves `/data/` with `Cache-Control: no-store`. Every run shows that run's numbers.
+- **Atomic writes.** The pipeline writes each file to a `.tmp` sibling, then renames it, so nginx never serves half a file.
+- **The chat can't take the map down.** nginx looks up `api` per request, so the map loads even if `api` is down; the chat then says it isn't reachable.
+- **Offline by default.** Seed data, Leaflet and the fonts are committed. The only runtime network use is map tiles, and the map still works without them.
 
-## Where the machine learning runs
+## What the pipeline checks
 
-- **In `data`, once per build:** the footfall model (ridge regression, validated on held-out localities, gated against a baseline) and the market types (k-means). Their output ships in `localities.geojson`, and their evaluation in `model_report.json`.
-- **In `api`, per question:** embedding retrieval with `bge-small-en-v1.5` and the refusal check. Gemini Flash, if a key is set, only rewrites retrieved facts into sentences.
-
-## Still to come
-
-- **One command to verify it all.** `make verify` rebuilds from scratch and runs the pipeline checks, both pytest suites, the chat evaluation and Playwright end-to-end tests. GitHub Actions already runs everything except Playwright on every pull request.
+The pipeline refuses to write anything if:
+- the ward count isn't 76 PMC + 64 PCMC,
+- any ward has more than 120,000 residents,
+- the PMC total isn't within 5% of the Census 2011 figure (3,124,458),
+- there are fewer than 1,200 outlets or 200 cafes, or outlets per 10,000 residents fall outside 2–40,
+- any score is outside 0–100,
+- any recommendation still has an unfilled `{slot}`,
+- any ward has no rent tier.

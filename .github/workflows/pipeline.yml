@@ -1,7 +1,7 @@
 # Runs the whole Compose stack on a clean Ubuntu machine for every pull
-# request: the pipeline's checks, both pytest suites, the chat evaluation,
-# live calls through nginx and the Playwright tests. `make verify` runs the
-# same checks locally.
+# request and every push to main: the pipeline's checks, both pytest
+# suites, the chat evaluation, live calls through nginx and the Playwright
+# tests. `make verify` runs the same checks locally.
 name: pipeline
 
 on:
@@ -13,37 +13,32 @@ jobs:
   compose:
     name: Build and run with Docker Compose
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      LOCALIO_LLM: offline
     steps:
       - uses: actions/checkout@v5
 
-      - name: Unit and pipeline tests
+      - name: Pipeline tests (with PostGIS)
         run: docker compose run --rm data python -m pytest -q -p no:cacheprovider tests
 
       - name: Build, run the pipeline and start the site and the API
         # web and api wait for data to exit 0, so this fails if any check fails.
-        run: docker compose up --build --detach web api
+        run: docker compose up --build --detach --wait web api
 
       - name: Pipeline log
         if: always()
         run: docker compose logs data
 
-      - name: Pipeline exited cleanly
-        run: test "$(docker compose ps --all --format '{{.ExitCode}}' data)" = "0"
-
       - name: Site and data are served
         run: |
-          for attempt in $(seq 1 15); do
-            curl -fsS -o /dev/null http://localhost:8080/ && break
-            sleep 2
-          done
           curl -fsS -o /dev/null http://localhost:8080/
-          curl -fsS http://localhost:8080/data/localities.geojson \
-            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'localities'); assert n == 51"
+          curl -fsS http://localhost:8080/data/wards.geojson \
+            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'wards'); assert n == 140"
           curl -fsS http://localhost:8080/data/pois.geojson \
-            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'outlets'); assert n == 259"
-          curl -fsS http://localhost:8080/data/model_report.json             | python3 -c "import json, sys; r = json.load(sys.stdin)['footfall']; print('demand from', r['demand_source'])"
-          curl -fsS http://localhost:8080/config.json
+            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'outlets'); assert n > 1200"
+          curl -fsS http://localhost:8080/data/rent.json \
+            | python3 -c "import json, sys; r = json.load(sys.stdin); print('typical rent', r['typical_psf'])"
 
       - name: API tests and the labelled chat questions
         run: |
@@ -52,12 +47,12 @@ jobs:
 
       - name: Chat answers through nginx
         run: |
-          for attempt in $(seq 1 30); do
-            curl -fsS -o /dev/null http://localhost:8080/api/health && break
-            sleep 2
-          done
-          curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json'             -d '{"question": "Tell me about Koregaon Park"}'             | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['cited'] == ['Koregaon Park']"
-          curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json'             -d '{"question": "who won the world cup"}'             | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['refused']"
+          curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json' \
+            -d '{"question": "Tell me about Koregaon Park"}' \
+            | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['cited'] == ['Koregaon Park']"
+          curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json' \
+            -d '{"question": "who won the world cup"}' \
+            | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['refused']"
 
       - name: End-to-end and visual tests
         env:
