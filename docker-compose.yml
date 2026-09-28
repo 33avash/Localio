@@ -50,19 +50,6 @@ services:
       timeout: 3s
       retries: 5
 
-  api:
-    build: ./api
-    environment:
-      # Optional. Without a key the chat answers from templates.
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LOCALIO_GEMINI_MODEL: ${LOCALIO_GEMINI_MODEL:-gemini-3.8-flash}
-      LOCALIO_LLM: ${LOCALIO_LLM:-}
-    volumes:
-      - ./output:/srv/localio-data:ro
-    depends_on:
-      data:
-        condition: service_completed_successfully
-
   # End-to-end and visual tests, run by make e2e / make verify.
   e2e:
     build: ./tests/e2e
@@ -76,8 +63,6 @@ services:
       - ./tests/e2e/test-results:/e2e/test-results
     depends_on:
       web:
-        condition: service_healthy
-      api:
         condition: service_healthy
 
   # One-off tools that need network access and write to seed_data/.
