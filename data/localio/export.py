@@ -1,8 +1,9 @@
 """Build and write the two GeoJSON files the map reads.
 
 pois.geojson        one Point per POI
-localities.geojson  one Point per locality centroid, with per-category
-                    stats, normalized score components and default scores
+localities.geojson  one Polygon per locality catchment, with per-category
+                    stats, density classes, normalized score components
+                    and default scores
 
 The normalized components ship with the file so the browser can re-weight
 scores instantly without a round trip.
@@ -37,9 +38,9 @@ def pois_collection(pois: pd.DataFrame) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
-def localities_collection(scored: pd.DataFrame, pois: pd.DataFrame, weights: dict) -> dict:
+def localities_collection(scored: pd.DataFrame, pois: pd.DataFrame, weights: dict, density_ranges: dict) -> dict:
     features = [
-        _point(row["longitude"], row["latitude"], _locality_properties(name, row))
+        {"type": "Feature", "geometry": row["geometry"], "properties": _locality_properties(name, row)}
         for name, row in scored.iterrows()
     ]
     meta = {
@@ -48,6 +49,7 @@ def localities_collection(scored: pd.DataFrame, pois: pd.DataFrame, weights: dic
         "default_weights": weights,
         "category_counts": {c: int((pois["category"] == c).sum()) for c in CATEGORIES},
         "saturation_ranges": {c: _tier_ranges(scored, c) for c in CATEGORIES},
+        "density_ranges": density_ranges,
     }
     return {"type": "FeatureCollection", "meta": meta, "features": features}
 
@@ -70,6 +72,8 @@ def _locality_properties(name: str, row: pd.Series) -> dict:
             "chain_count": int(row[f"{c}_chain_count"]),
             "independent_count": int(row[f"{c}_independent_count"]),
             "saturation": row[f"{c}_saturation"],
+            "per_10k": _num(row[f"{c}_per_10k"], 2),
+            "density_class": int(row[f"{c}_density_class"]),
             "supply_n": _num(row[f"{c}_supply_n"]),
             "weakness_n": _num(row[f"{c}_weakness_n"]),
             "score": _num(row[f"{c}_score"], 2),
@@ -84,6 +88,8 @@ def _locality_properties(name: str, row: pd.Series) -> dict:
         "population": int(row["population"]),
         "area_km2": _num(row["area_km2"], 2),
         "label_point": [_num(row["label_longitude"], 5), _num(row["label_latitude"], 5)],
+        "total_per_10k": _num(row["total_per_10k"], 2),
+        "total_density_class": int(row["total_density_class"]),
         "demand_n": _num(row["demand_n"]),
         "categories": categories,
     }

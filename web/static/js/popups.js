@@ -19,9 +19,10 @@ export function localityPopup(properties, { category, lens }) {
     `<tr><th scope="row">${label}</th>${keys.map((key) => `<td${chosen(key)}>${value(properties.categories[key])}</td>`).join("")}</tr>`;
 
   const outlets = `${num(properties.total_pois)} ${properties.total_pois === 1 ? "outlet" : "outlets"}`;
+  const residents = `${num(compact(properties.population))} residents`;
   const summary = properties.status === "scored"
-    ? `${outlets} · ${num(compact(properties.total_reviews))} reviews`
-    : `${outlets} · too few to score`;
+    ? `${residents} · ${outlets} · ${num(compact(properties.total_reviews))} reviews`
+    : `${residents} · ${outlets} · too few to score`;
   const points = category && lens ? score(properties, category, LENSES[lens].weights) : null;
   const scoreLine = points === null
     ? ""
@@ -34,7 +35,7 @@ export function localityPopup(properties, { category, lens }) {
       <thead><tr><td></td>${keys.map((key) => `<th scope="col"${chosen(key)}>${CATEGORIES[key].label}</th>`).join("")}</tr></thead>
       <tbody>
         ${row("Outlets", (s) => num(s.count))}
-        ${row("Saturation", (s) => s.saturation[0].toUpperCase() + s.saturation.slice(1))}
+        ${row("Per 10k residents", (s) => num(s.per_10k.toFixed(2)))}
         ${row("Avg rating", (s) => (s.avg_rating === null ? "–" : `${num(s.avg_rating.toFixed(1))}★`))}
         ${row("Chain / indie", (s) => num(`${s.chain_count} / ${s.independent_count}`))}
       </tbody>

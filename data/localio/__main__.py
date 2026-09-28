@@ -13,6 +13,7 @@ from pathlib import Path
 
 from localio.aggregate import aggregate
 from localio.clean import clean
+from localio.density import add_density
 from localio.geo import CatchmentError, attach, load_catchments
 from localio.export import localities_collection, pois_collection, write_geojson
 from localio.load import InputError, load_table
@@ -42,6 +43,7 @@ def main() -> int:
         _line("dropped", f"{count}  ({reason})")
 
     localities, _ = assign_tiers(attach(aggregate(pois), catchments))
+    localities, density_ranges = add_density(localities)
     scored = score(localities, DEFAULT_WEIGHTS)
 
     checks = check_counts(pois, localities) + check_catchments(localities) + check_scores(scored)
@@ -53,7 +55,7 @@ def main() -> int:
 
     outputs = {
         "pois.geojson": pois_collection(pois),
-        "localities.geojson": localities_collection(scored, pois, DEFAULT_WEIGHTS),
+        "localities.geojson": localities_collection(scored, pois, DEFAULT_WEIGHTS, density_ranges),
     }
     for filename, collection in outputs.items():
         path = output_dir / filename
