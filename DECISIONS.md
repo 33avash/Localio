@@ -32,22 +32,30 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 ## Containers
 
-**Four services with a strict start order.** `data` waits for a healthy `db`, and `web` and `api` wait for `data` to succeed. A failed check means no site, never a site with bad numbers.
+**Three services with a strict start order.** `data` waits for a healthy `db`, and `web` waits for `data` to succeed. A failed check means no site, never a site with bad numbers.
 
 **No stale state anywhere.** tmpfs for the database, a bind mount (not a volume) for `./output`, and `no-store` on `/data/`.
 
 **Vendored front-end assets.** Leaflet and the fonts are committed, so a demo doesn't depend on a CDN.
 
+**Published by the same containers.** GitHub Actions runs `docker compose run data` and publishes the site with its output to GitHub Pages, so the live link shows exactly what the pipeline produced and checked.
+
 ## Front end
+
+**One screen, not a wizard.** The plan's five inputs sit above the top 5 and every change re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly.
+
+**Every score shows its parts.** Each row splits its score into busyness points and room (low-competition) points, so a ranking is never a bare number.
 
 **Plain ES modules, no build step.** The site is a few small modules; a bundler would add a toolchain to install and break.
 
-**A guided flow, not a dashboard.** Four steps end in a ranked top 5. The step rail doubles as the way back, and the URL records where you are, so a shortlist can be shared.
+**The URL is the plan.** Format, priority, area, size and budget live in the hash, so a link reopens the same shortlist.
 
 ## Chat
 
-**Decide the question type first.** Ranking questions ("best area for a QSR") are answered from the scores; similarity search can't rank by a number. Only open questions use retrieval.
+**In the browser, from the same files.** The chat reads the ward data the map uses, so the two can't disagree; a test checks the chat's top 5 equals the map's for every plan it's asked about. It needs no server, which is what lets the published site be a static page.
 
-**Refuse by rules, then similarity.** A ward name or a domain word keeps a question in scope. Otherwise it needs a similarity of at least 0.62 to some ward's facts. All 11 off-topic test questions are refused.
+**Rules, not a language model.** It finds ward names (official titles and the places inside each ward), reads format, priority, area, budget and size from the question, and picks one of a few answer types: a ward, a comparison, why a ward ranks where it does, rent, a ranking, gaps, or the method. A model would sound more fluent but could state numbers the data doesn't hold; this can't.
 
-**Gemini only rewords the facts.** It gets the retrieved ward cards and nothing else, must cite the wards it used, and any citation it wasn't given is dropped. Without a key the chat uses templates, so tests and a fresh clone need no secret.
+**Refuse instead of guessing.** A question must name a ward or use a domain word (cafe, QSR, rent, ward, and so on). All 11 off-topic test questions are refused.
+
+**Answers can act.** When a question asks for a different plan ("Cafes in PCMC under ₹30k"), the answer offers to set it on the map.

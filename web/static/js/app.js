@@ -1,18 +1,19 @@
+import { reply, wardIndex } from "./chat.js";
 import { drawerHtml } from "./drawer.js";
 import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
 import { methodHtml } from "./method.js";
-import { animateScores } from "./motion.js";
-import { renderLoadError, renderPanel, rentCells, STEPS } from "./panel.js";
-import { LENSES, rank } from "./score.js";
+import { countUp } from "./motion.js";
+import { renderLoadError, renderPanel, renderResults } from "./panel.js";
+import { AREAS, LENSES, rank } from "./score.js";
 import { enableSheet } from "./sheet.js";
 
 const panel = document.getElementById("panel");
 const drawer = document.getElementById("drawer");
 const regions = {
-  rail: document.getElementById("panel-rail"),
   body: document.getElementById("panel-body"),
   foot: document.getElementById("panel-foot"),
+  tabs: [...document.querySelectorAll("[role=tab]")],
 };
 
 const sheet = enableSheet(panel, document.getElementById("sheet-handle"));
@@ -25,7 +26,8 @@ async function getJson(url) {
   return response.json();
 }
 
-// The key is optional, so a missing config just means OpenStreetMap tiles.
+// The key is optional (and absent on the published site), so a missing
+// config just means OpenStreetMap tiles.
 const config = await getJson("config.json").catch(() => ({}));
 const map = createMap(document.getElementById("map"), {
   cartoKey: config.cartoKey,
@@ -39,8 +41,8 @@ async function loadData() {
     const [pois, wards, rent] = await Promise.all(
       ["data/pois.geojson", "data/wards.geojson", "data/rent.json"].map(getJson),
     );
-    if (!pois.features?.length || !wards.features?.length) throw new Error("The GeoJSON files are empty.");
-    return { pois: pois.features, wards: wards.features, meta: wards.meta, rent };
+    if (!pois.features?.length || !wards.features?.length) throw new Error("The ward data is empty.");
+    return { pois: pois.features, wards: wards.features, meta: wards.meta, rent, index: wardIndex(wards.features) };
   } catch (error) {
     renderLoadError(regions.body, error.message);
     return null;
@@ -50,83 +52,104 @@ async function loadData() {
 const data = await loadData();
 
 const state = {
-  ...(data ? readHash() : { step: 1, category: null, lens: null, sqft: 300 }),
-  includeLow: false,
-  conversation: { messages: [], pending: false, draft: "" },
+  tab: "plan",
+  plan: data ? readHash() : null,
+  conversation: { messages: [], draft: "", last: [] },
 };
-let shown = { ranking: [], lens: null, scores: new Map(), widths: new Map() };
+let shown = new Map();
 let returnFocus = null;
 // Matches the sheet's height transition in localio.css.
 const SHEET_MS = 260;
 
+// Setting a plan value from a button, the chat or the empty state.
+const PARSE = {
+  category: String, lens: String, area: String,
+  budget: (v) => (v === "" || v === null ? null : Number(v)),
+  sqft: Number,
+  includeLow: (v) => v === true || v === "true",
+};
+
 const actions = {
-  category: (value) => { state.category = value; },
-  lens: (value) => { state.lens = value; },
-  next: () => { state.step += 1; },
-  goto: (value) => { state.step = Number(value); },
-  restart: () => {
-    Object.assign(state, { step: 1, category: null, lens: null });
-    closeDrawer();
-    map.resetView();
+  set: (control) => { state.plan[control.dataset.key] = PARSE[control.dataset.key](control.dataset.value); },
+  tab: (control) => { state.tab = control.dataset.value; },
+  apply: (control) => {
+    Object.assign(state.plan, state.conversation.messages[Number(control.dataset.value)].plan);
+    state.tab = "plan";
   },
 };
 
-// Controls that open the drawer or send a question don't change the flow,
-// so they skip the re-render (which would rebuild the list under the user).
-const drawerActions = {
-  pick: (value) => openWard(shown.ranking[Number(value)].feature.properties.name, { fly: true }),
-  "open-ward": (value) => openWard(value, { fly: true }),
+// Controls that open the drawer or ask a question don't re-render the plan.
+const quiet = {
+  pick: (control) => openWard(ranking()[Number(control.dataset.value)].feature.properties.name, { fly: true }),
+  "open-ward": (control) => openWard(control.dataset.value, { fly: true }),
   "close-drawer": () => closeDrawer(),
   method: () => openDrawer(methodHtml(data)),
-  ask: (value) => send(value),
+  ask: (control) => send(control.dataset.value),
+  "ask-ward": (control) => {
+    closeDrawer();
+    state.tab = "ask";
+    send(`Tell me about ${control.dataset.value}`);
+  },
 };
 
 panel.addEventListener("click", (event) => {
   const control = event.target.closest("[data-action]");
-  if (!control) return;
-  const { action, value } = control.dataset;
-  if (drawerActions[action]) {
-    drawerActions[action](value);
+  if (!control || !data) return;
+  const { action } = control.dataset;
+  if (quiet[action]) {
+    quiet[action](control);
     return;
   }
-  const previousStep = state.step;
-  actions[action](value);
+  actions[action](control);
   render();
-  restoreFocus(control, state.step !== previousStep);
+  const selector = `[data-action="${action}"][data-value="${control.dataset.value}"]${control.dataset.key ? `[data-key="${control.dataset.key}"]` : ""}`;
+  (panel.querySelector(selector) ?? regions.body.querySelector("h2"))?.focus();
 });
 
-// The chat input: Enter sends, Shift+Enter adds a line, and the draft
-// survives re-renders.
+// Arrow keys move between tabs, as the ARIA tabs pattern expects.
+panel.addEventListener("keydown", (event) => {
+  if (event.target.matches("[role=tab]") && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+    state.tab = state.tab === "plan" ? "ask" : "plan";
+    render();
+    document.getElementById(`tab-${state.tab}`).focus();
+    return;
+  }
+  if (event.target.id === "ask-input" && event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    event.target.form.requestSubmit();
+  }
+});
+
 panel.addEventListener("submit", (event) => {
   if (!event.target.matches("[data-form=ask]")) return;
   event.preventDefault();
   send(event.target.querySelector("textarea").value);
 });
 
-panel.addEventListener("keydown", (event) => {
-  if (event.target.id !== "ask-input" || event.key !== "Enter" || event.shiftKey) return;
-  event.preventDefault();
-  event.target.form.requestSubmit();
-});
+// Typing a size or budget re-ranks as you type; the field keeps its focus.
+// A value that isn't sensible is marked and ignored until it is.
+const FIELDS = {
+  sqft: { key: "sqft", ok: (v) => v >= 50 && v <= 5000 },
+  budget: { key: "budget", ok: (v) => v >= 1000, blank: null },
+};
 
-// Typing an outlet size updates every rent figure at once. Only the rent
-// cells change, so the field keeps its focus and caret; a size that isn't
-// a sensible number is marked and ignored until it is.
 panel.addEventListener("input", (event) => {
   if (event.target.id === "ask-input") state.conversation.draft = event.target.value;
-  if (event.target.id !== "sqft") return;
-  const value = Number(event.target.value);
-  const ok = Number.isFinite(value) && value >= 50 && value <= 5000;
+  const field = FIELDS[event.target.id];
+  if (!field) return;
+  const raw = event.target.value.trim();
+  const value = Number(raw);
+  const blank = raw === "" && "blank" in field;
+  const ok = blank || (raw !== "" && Number.isFinite(value) && field.ok(value));
   event.target.setAttribute("aria-invalid", String(!ok));
   if (!ok) return;
-  state.sqft = value;
-  rentCells(regions.body, state, data);
-  writeHash();
+  state.plan[field.key] = blank ? field.blank : value;
+  render({ resultsOnly: true });
 });
 
 panel.addEventListener("change", (event) => {
   if (event.target.id !== "include-low") return;
-  state.includeLow = event.target.checked;
+  state.plan.includeLow = event.target.checked;
   render();
   document.getElementById("include-low")?.focus();
 });
@@ -136,108 +159,67 @@ document.addEventListener("keydown", (event) => {
 });
 
 function ranking() {
-  if (state.step < 3 || !state.category || !state.lens) return [];
-  return rank(data.wards, state.category, state.lens, { includeLow: state.includeLow });
+  return rank(data.wards, state.plan, data.rent);
 }
 
-function render() {
+function render({ resultsOnly = false } = {}) {
   const ranked = ranking();
-  renderPanel(regions, state, { ...data, ranking: ranked });
-  map.render({
-    step: state.step,
-    category: state.category,
-    meta: data.meta,
-    pois: data.pois,
-    wards: data.wards,
-    picks: ranked.slice(0, 5).map(({ feature }) => feature),
-  });
+  const view = { ...data, ranking: ranked, conversation: state.conversation };
+  if (resultsOnly) renderResults(regions.body, state, view);
+  else renderPanel(regions, state, view);
+  map.render({ category: state.plan.category, meta: data.meta, pois: data.pois, wards: data.wards,
+    picks: ranked.slice(0, 5).map(({ feature }) => feature) });
   writeHash();
-  wireRows(ranked);
+  wireRows();
 }
 
-// Hovering or focusing a row finds its marker; when the priority changed,
-// scores count from their old values so the re-ranking is visible.
-function wireRows(ranked) {
+// Hovering or focusing a row finds its marker; scores count from their
+// previous values, so a change of input visibly re-ranks the list.
+function wireRows() {
   const rows = [...regions.body.querySelectorAll("[data-action=pick]")];
-  const animated = [];
+  const counts = [];
   for (const row of rows) {
     const index = Number(row.dataset.value);
     for (const [type, on] of [["mouseenter", true], ["mouseleave", false], ["focus", true], ["blur", false]]) {
       row.addEventListener(type, () => map.highlightPick(index, on));
     }
-    const { name } = row.dataset;
-    const scoreElement = row.querySelector(".pick-score");
-    const bar = row.querySelector(".pick-bar");
-    const to = Number(scoreElement.dataset.score);
-    if (shown.lens && shown.lens !== state.lens) {
-      animated.push({
-        element: scoreElement, bar, to, from: shown.scores.get(name) ?? to,
-        toWidth: parseFloat(bar.style.width), fromWidth: shown.widths.get(name) ?? 0,
-      });
-    }
+    const element = row.querySelector(".pick-score");
+    const to = Number(element.dataset.score);
+    const from = shown.get(row.dataset.name);
+    if (from !== undefined && Math.round(from) !== Math.round(to)) counts.push({ element, from, to });
   }
-  if (animated.length) animateScores(animated);
-  shown = {
-    ranking: ranked,
-    lens: state.step === 3 ? state.lens : null,
-    scores: new Map(rows.map((row) => [row.dataset.name, Number(row.querySelector(".pick-score").dataset.score)])),
-    widths: new Map(rows.map((row) => [row.dataset.name, parseFloat(row.querySelector(".pick-bar").style.width)])),
-  };
+  if (counts.length) countUp(counts);
+  if (rows.length) shown = new Map(rows.map((row) => [row.dataset.name, Number(row.querySelector(".pick-score").dataset.score)]));
 }
 
-async function send(text) {
+// The chat answers in the browser from the same data and plan as the map.
+function send(text) {
   const question = text.trim();
+  if (!question) return;
   const { conversation } = state;
-  if (!question || conversation.pending) return;
+  const answer = reply(question, { ...data, plan: state.plan, ranking: ranking(), last: conversation.last });
   conversation.messages.push({ role: "user", text: question });
-  conversation.pending = true;
+  conversation.messages.push({ role: "answer", ...answer, wards: answer.wards.map((w) => w.properties.name) });
+  if (answer.wards.length) conversation.last = answer.wards;
   conversation.draft = "";
-  renderChat();
-  conversation.messages.push(await answer(question));
-  conversation.pending = false;
-  renderChat();
-  document.getElementById("ask-input")?.focus();
-}
-
-async function answer(question) {
-  try {
-    const response = await fetch("api/ask", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, category: state.category, lens: state.lens }),
-    });
-    // 502-504 come from nginx when the api container isn't there.
-    if (response.status >= 502) throw new Error(`HTTP ${response.status}`);
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) return { role: "answer", error: true, text: body.detail ?? `The chat service returned HTTP ${response.status}.` };
-    return { role: "answer", text: body.answer, cited: body.cited, refused: body.refused, mode: body.mode };
-  } catch {
-    return { role: "answer", error: true, text: "The chat service isn't reachable. The map and shortlist still work." };
-  }
-}
-
-// Re-render the Ask step and keep the newest message in view.
-function renderChat() {
-  if (state.step !== 4) return;
+  state.tab = "ask";
   render();
   regions.body.scrollTop = regions.body.scrollHeight;
+  document.getElementById("ask-input")?.focus();
 }
 
 function openWard(name, { fly = false } = {}) {
   const feature = data.wards.find((f) => f.properties.name === name);
   if (!feature) return;
-  const sheetMoved = openDrawer(drawerHtml(feature, { ...state, meta: data.meta, rent: data.rent, rank: rankOf(feature) }));
+  const index = ranking().findIndex((r) => r.feature === feature);
+  const sheetMoved = openDrawer(drawerHtml(feature, {
+    plan: state.plan, meta: data.meta, rent: data.rent, position: index >= 0 && index < 5 ? index + 1 : null,
+  }));
   map.select(name);
   if (!fly) return;
   // On a phone the sheet just rose; fly once the map has its new size.
   if (sheetMoved) setTimeout(() => map.focusWard(name), SHEET_MS);
   else map.focusWard(name);
-}
-
-function rankOf(feature) {
-  if (!state.category || !state.lens || feature.properties.status !== "scored") return null;
-  const confident = rank(data.wards, state.category, state.lens);
-  return { position: confident.findIndex((r) => r.feature === feature) + 1, of: confident.length };
 }
 
 // The drawer slides over the panel, never the map: the map is the context.
@@ -256,38 +238,36 @@ function closeDrawer() {
   drawer.hidden = true;
   map.select(null);
   const usable = returnFocus?.isConnected && returnFocus !== document.body;
-  const target = usable ? returnFocus : regions.body.querySelector("h2");
-  target?.focus();
+  (usable ? returnFocus : regions.body.querySelector("h2"))?.focus();
   returnFocus = null;
 }
 
-// Re-rendering replaces the panel's buttons, so put keyboard focus back:
-// on the new heading after a step change, otherwise on the same control.
-function restoreFocus(control, stepChanged) {
-  const { action, value } = control.dataset;
-  const selector = stepChanged ? "h2" : `[data-action="${action}"]${value ? `[data-value="${value}"]` : ""}`;
-  (regions.body.querySelector(selector) ?? panel.querySelector(selector))?.focus();
-}
-
-// The URL hash mirrors the flow, e.g. #shortlist/qsr/busy?sqft=450, so a
-// shortlist can be reloaded or shared exactly as it looked.
+// The URL records the plan, e.g. #qsr/busy/pcmc?sqft=450&budget=40000, so
+// a shortlist can be shared and reopened exactly as it looked.
 function readHash() {
   const [path, query = ""] = decodeURIComponent(location.hash.slice(1)).split("?");
-  const [stepName, slug, lens] = path.split("/");
-  const category = Object.keys(CATEGORIES).find((key) => CATEGORIES[key].slug === slug) ?? null;
-  const knownLens = Object.hasOwn(LENSES, lens ?? "") ? lens : null;
-  let step = Math.max(1, STEPS.findIndex((name) => name.toLowerCase() === stepName) + 1);
-  if (!category) step = 1;
-  else if (step >= 3 && !knownLens) step = 2;
-  const sqft = Number(new URLSearchParams(query).get("sqft"));
-  return { step, category, lens: knownLens, sqft: sqft >= 50 && sqft <= 5000 ? sqft : data.rent.default_sqft };
+  const [slug, lens, area] = path.split("/");
+  const params = new URLSearchParams(query);
+  const sqft = Number(params.get("sqft"));
+  const budget = Number(params.get("budget"));
+  return {
+    category: Object.keys(CATEGORIES).find((key) => CATEGORIES[key].slug === slug) ?? "cafe",
+    lens: Object.hasOwn(LENSES, lens ?? "") ? lens : "balanced",
+    area: Object.hasOwn(AREAS, area ?? "") ? area : "all",
+    sqft: sqft >= 50 && sqft <= 5000 ? sqft : data.rent.default_sqft,
+    budget: budget >= 1000 ? budget : null,
+    includeLow: params.get("low") === "1",
+  };
 }
 
 function writeHash() {
-  const parts = [STEPS[state.step - 1].toLowerCase(), CATEGORIES[state.category]?.slug, state.lens];
-  const size = state.sqft !== data.rent.default_sqft ? `?sqft=${state.sqft}` : "";
-  const hash = state.category ? `#${parts.filter(Boolean).join("/")}${size}` : "";
-  history.replaceState(null, "", hash || location.pathname);
+  const p = state.plan;
+  const params = new URLSearchParams();
+  if (p.sqft !== data.rent.default_sqft) params.set("sqft", p.sqft);
+  if (p.budget) params.set("budget", p.budget);
+  if (p.includeLow) params.set("low", "1");
+  const query = params.toString();
+  history.replaceState(null, "", `#${CATEGORIES[p.category].slug}/${p.lens}/${p.area}${query ? `?${query}` : ""}`);
 }
 
 if (data) {

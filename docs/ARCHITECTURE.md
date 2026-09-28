@@ -1,6 +1,6 @@
 # Architecture
 
-One `docker compose up` goes from committed seed files to a working site. The pipeline runs once and exits; the map and the chat then serve what it wrote.
+One `docker compose up` goes from committed seed files to a working site. The pipeline runs once and exits; nginx then serves the site and the files the pipeline wrote. The same containers build the published site on GitHub.
 
 ```mermaid
 flowchart LR
@@ -14,7 +14,7 @@ flowchart LR
         direction TB
         load["load seed files"] --> join["place outlets in wards<br/>ST_Contains"]
         join --> count["counts, per 10k residents"]
-        count --> score["busyness, competition,<br/>score, rent tier"]
+        count --> score["busyness, competition,<br/>rent tier, recommendation"]
         score --> check{"checks"}
     end
 
@@ -23,21 +23,15 @@ flowchart LR
     end
 
     subgraph web["web · nginx:alpine"]
-        site["map: Leaflet +<br/>plain ES modules"]
-    end
-
-    subgraph api["api · FastAPI"]
-        ask["/api/ask: refuse, retrieve,<br/>answer from ward facts"]
+        site["plan, map, drawer<br/>and chat, in the browser"]
     end
 
     seed --> load
     load <--> pg
     check -- "all ok" --> files
-    check -- "any fail: exit 1" --> stop(["nothing written,<br/>web and api never start"])
-    files -- "read-only" --> web & api
-    web -- "proxies /api/" --> api
+    check -- "any fail: exit 1" --> stop(["nothing written,<br/>web never starts"])
+    files -- "read-only" --> web
     web --> browser(["browser"])
-    api -. "optional key" .-> gemini(["Gemini"])
 ```
 
 ## Containers
@@ -46,18 +40,21 @@ flowchart LR
 |---|---|---|---|
 | `db` | `postgis/postgis:17-3.5` | while the stack is up | Spatial joins for the pipeline. Its data lives in tmpfs, so every run starts empty. |
 | `data` | `python:3.11-slim` + pandas, shapely, psycopg | once; exits 0 or 1 | Load, join, score, check, write `./output`. |
-| `web` | `nginx:alpine` | long-running, port 8080 | Serve the site, serve `./output` at `/data/`, proxy `/api/`. |
-| `api` | `python:3.11-slim` + FastAPI, fastembed | long-running | Answer chat questions from the ward facts. |
+| `web` | `nginx:alpine` | long-running, port 8080 | Serve the site and `./output` at `/data/`. |
 | `e2e` | `mcr.microsoft.com/playwright` | on demand (`test` profile) | Browser tests against `web`. |
 | `osm`, `population` | `python:3.11-slim` + requests, rasterio | on demand (`tools` profile) | Rebuild `seed_data/` from the internet. |
 
 ## How the pieces connect
 
-- **Start order.** `data` waits for `db` to be healthy. `web` and `api` wait for `data` to finish successfully, so a failed check means the site never shows bad numbers.
-- **No stale state.** The database uses tmpfs and `./output` is a bind mount, not a named volume. nginx serves `/data/` with `Cache-Control: no-store`. Every run shows that run's numbers.
-- **Atomic writes.** The pipeline writes each file to a `.tmp` sibling, then renames it, so nginx never serves half a file.
-- **The chat can't take the map down.** nginx looks up `api` per request, so the map loads even if `api` is down; the chat then says it isn't reachable.
+- **Start order.** `data` waits for `db` to be healthy; `web` waits for `data` to finish successfully. A failed check means the site never shows bad numbers.
+- **No stale state.** The database uses tmpfs, `./output` is a bind mount rather than a named volume, and nginx serves `/data/` with `Cache-Control: no-store`. Every run shows that run's numbers.
+- **Atomic writes.** The pipeline writes each file to a `.tmp` sibling and then renames it, so nginx never serves half a file.
+- **The browser does the interactive work.** The pipeline ships each ward's busyness, competition and rent tier, so changing the plan re-ranks instantly, and the chat answers from the same files with no server.
 - **Offline by default.** Seed data, Leaflet and the fonts are committed. The only runtime network use is map tiles, and the map still works without them.
+
+## Publishing
+
+`.github/workflows/pages.yml` runs on every push to `main`: `docker compose run --rm data` (which starts `db`), then it copies `web/static/` and the three output files into one folder and publishes it to GitHub Pages. If a pipeline check fails, nothing is published. `.github/workflows/checks.yml` runs the pipeline tests and the browser tests on every pull request.
 
 ## What the pipeline checks
 

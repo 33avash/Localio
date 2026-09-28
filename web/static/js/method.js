@@ -33,8 +33,9 @@ export function methodHtml({ meta, wards, rent }) {
         km², food and drink outlets per km², and offices, colleges and stations per km².</p>
       <p><strong>Competition</strong> is your format's outlets per 10,000 residents, set against the city median:
         0 with none, 0.5 at the median, close to 1 when crowded.</p>
-      <p>Score = 100 × (busyness weight × busyness + competition weight × (1 − competition)). The priority you
-        pick sets the weights:</p>
+      <p>Score = 100 × (busyness weight × busyness + competition weight × (1 − competition)). The two parts are
+        shown on every row as busyness points plus room (low-competition) points. The priority you pick sets the
+        weights:</p>
       <ul class="plain">${weights.join("")}</ul>
       <p class="note">${num(few)} wards have under ${num(meta.min_outlets)} outlets. They're scored, but hatched on the
         map and left off the shortlist unless you include them: one missing outlet would move them a long way.</p>
@@ -56,9 +57,10 @@ export function methodHtml({ meta, wards, rent }) {
 
     <section class="drawer-section">
       <h3>4. The chat</h3>
-      <p>Each ward has a short fact card built from the numbers above. The chat answers only from those cards,
-        names the wards it used, and refuses anything that isn't about opening a cafe or QSR in Pune. With a Gemini key
-        it words the answer; without one it uses templates.</p>
+      <p>The chat runs in your browser on the same data as the map. It reads the format, priority, area, budget or
+        shop size from your question, answers with the numbers above, and names the wards it used, so every answer can be
+        checked on the map. There's no language model: anything that isn't about opening a cafe or QSR in Pune is
+        refused, not guessed.</p>
     </section>
 
     <section class="drawer-section">

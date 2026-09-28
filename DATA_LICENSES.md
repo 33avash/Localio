@@ -14,9 +14,8 @@ Localio's code is MIT licensed (see [LICENSE](LICENSE)). The data and tools it u
 | [Square Yards shop listings](https://www.squareyards.com/rent/shops-for-rent-in-pune) (`seed_data/rent_listings.csv`) | 25 asking rents, for the typical rent | Published figures, cited with their source. Not covered by the MIT licence. |
 | [DineOpen](https://www.dineopen.com/blog/restaurant-profit-margins-india-guide.html) (`seed_data/rent_benchmarks.csv`) | shop size and healthy rent share | Published figures, cited with their source. |
 | CARTO basemaps (optional) | quieter tiles when a key is set | [CARTO basemap terms](https://carto.com/basemaps) |
-| Google Gemini API (optional) | writing chat answers when a key is set | [Gemini API terms](https://ai.google.dev/gemini-api/terms). Free-tier prompts may be used to improve Google's products. |
 
-Earlier versions used a table of 260 outlets from the Google Places API. Google's terms restrict storing and redistributing Places content, so it was removed from the repository; it remains only in the git history of the old branches.
+Earlier versions used a table of 260 outlets from the Google Places API. Google's terms restrict storing and redistributing Places content, so it was removed from the repository and from its history.
 
 ## Tools
 
@@ -24,7 +23,7 @@ Earlier versions used a table of 260 outlets from the Google Places API. Google'
 |---|---|---|
 | Docker Engine and Compose | containers and orchestration | Apache 2.0 |
 | PostgreSQL and PostGIS | spatial joins | PostgreSQL Licence, GPL 2.0 |
-| Python 3.11 | pipeline and API | PSF |
+| Python 3.11 | pipeline | PSF |
 | pandas, NumPy | tables and numbers | BSD 3-Clause |
 | Shapely | ward geometry, label points | BSD 3-Clause |
 | psycopg | Python to PostgreSQL | LGPL 3.0 |
@@ -33,7 +32,5 @@ Earlier versions used a table of 260 outlets from the Google Places API. Google'
 | nginx | web server | BSD 2-Clause |
 | Leaflet 1.9.4 | the map | BSD 2-Clause |
 | IBM Plex Sans and Mono | typefaces | SIL Open Font License 1.1 |
-| FastAPI, Uvicorn, httpx | chat API | MIT, BSD 3-Clause, BSD 3-Clause |
-| fastembed + BAAI/bge-small-en-v1.5 | matching questions to wards | Apache 2.0, MIT |
 | pytest, Playwright, axe-core | tests | MIT, Apache 2.0, MPL 2.0 |
-| GitHub Actions | CI | GitHub terms (hosted service) |
+| GitHub Actions and Pages | checks and the published site | GitHub terms (hosted service) |

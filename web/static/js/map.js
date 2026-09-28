@@ -63,7 +63,7 @@ export function createMap(element, { cartoKey, onSelect }) {
   map.createPane("outlets").style.zIndex = 450;
 
   // Markers only ever go into named groups, cleared on every render,
-  // so nothing accumulates across steps.
+  // so nothing accumulates between renders.
   const areas = L.layerGroup().addTo(map);
   const hatching = L.layerGroup().addTo(map);
   const outlets = L.layerGroup().addTo(map);
@@ -102,14 +102,14 @@ export function createMap(element, { cartoKey, onSelect }) {
     areaLayers = new Map();
     drawAreas(view);
     drawOutlets(view);
-    if (view.step >= 3) drawPicks(view);
+    drawPicks(view);
     legend.getContainer().innerHTML = legendHtml(view, showOutlets(view), legendOpen);
   }
 
-  // Dots are on by default while choosing a format and off after that,
-  // unless the legend checkbox says otherwise.
+  // Outlet dots are off until the legend's checkbox turns them on: the
+  // shaded wards and the top 5 are the story.
   function showOutlets(view) {
-    return outletsChoice ?? view.step === 1;
+    return outletsChoice ?? false;
   }
 
   // Once a format is picked, the other one fades to grey but stays visible,
@@ -140,17 +140,16 @@ export function createMap(element, { cartoKey, onSelect }) {
   // outlets for a confident score get a hatch on top. Hovering shows the
   // name and headline figure; clicking opens the detail drawer.
   function drawAreas(view) {
-    const shortlisted = view.step >= 3;
     for (const ward of view.wards) {
       const { name } = ward.properties;
-      const dimmed = shortlisted && !view.picks.includes(ward);
+      const dimmed = !view.picks.includes(ward);
       const area = L.geoJSON(ward, {
         style: {
           color: "#FFFFFF",
           opacity: 0.25,
           weight: 0.5,
           fillColor: DENSITY[densityClass(ward, view.category)],
-          fillOpacity: dimmed ? 0.2 : 0.7,
+          fillOpacity: dimmed ? 0.45 : 0.75,
         },
       });
       area.eachLayer((layer) => {

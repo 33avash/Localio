@@ -1,0 +1,52 @@
+# Every pull request and every push to main: build the stack on a clean
+# Ubuntu machine, run the pipeline's checks and tests, then the browser
+# tests (map, chat and visuals). `make verify` runs the same locally.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  compose:
+    name: Build and test with Docker Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Pipeline tests (with PostGIS)
+        run: docker compose run --rm data python -m pytest -q -p no:cacheprovider tests
+
+      - name: Build, run the pipeline and start the site
+        # web waits for data to exit 0, so this fails if any check fails.
+        run: docker compose up --build --detach --wait web
+
+      - name: Pipeline log
+        if: always()
+        run: docker compose logs data
+
+      - name: Site and data are served
+        run: |
+          curl -fsS -o /dev/null http://localhost:8080/
+          curl -fsS http://localhost:8080/data/wards.geojson \
+            | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'wards'); assert n == 140"
+          curl -fsS http://localhost:8080/data/rent.json \
+            | python3 -c "import json, sys; print('typical rent', json.load(sys.stdin)['typical_psf'])"
+
+      - name: Browser tests (map, chat, visuals)
+        env:
+          CI: "true"
+        run: docker compose --profile test run --rm --build e2e
+
+      - name: Keep Playwright's diffs if a test failed
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: tests/e2e/test-results/
+
+      - name: Stop
+        if: always()
+        run: docker compose down
