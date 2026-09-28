@@ -22,6 +22,11 @@ services:
     depends_on:
       data:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   api:
     build: ./api
@@ -35,6 +40,23 @@ services:
     depends_on:
       data:
         condition: service_completed_successfully
+
+  # End-to-end and visual tests, run by make e2e / make verify.
+  e2e:
+    build: ./tests/e2e
+    profiles: ["test"]
+    environment:
+      BASE_URL: http://web
+      CI: ${CI:-}
+    volumes:
+      # Mounted so baseline updates (make e2e-update) land in the repo.
+      - ./tests/e2e/specs:/e2e/specs
+      - ./tests/e2e/test-results:/e2e/test-results
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
   # One-off, needs network: rebuilds seed_data/catchments.geojson.
   # Run with: docker compose run --rm catchments
