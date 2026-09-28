@@ -1,6 +1,6 @@
 """The HTTP layer, with the real embedding model and the pipeline's output."""
 
-from localio_api import main
+from localio_api import facts, main
 from localio_api.evaluate import evaluate
 
 
@@ -18,6 +18,15 @@ def test_known_question_cites_a_locality_named_in_the_answer(client, monkeypatch
     monkeypatch.setenv("LOCALIO_LLM", "offline")
     body = client.post("/api/ask", json={"question": "Tell me about Koregaon Park"}).json()
     assert body["cited"] == ["Koregaon Park"] and "Koregaon Park" in body["answer"]
+
+
+def test_answers_about_a_ward_quote_its_money_as_a_range(client, monkeypatch, localities):
+    monkeypatch.setenv("LOCALIO_LLM", "offline")
+    body = client.post("/api/ask", json={"question": "Should I open a QSR in Kharadi?", "category": "fast_food"}).json()
+    kharadi = next(loc for loc in localities if loc.name == "Kharadi Infotech Park")
+    low, _, high = kharadi.properties["economics"]["fast_food"]["profit"]
+    assert "profit a month (p10 to p90)" in body["answer"]
+    assert facts.rupees(low) in body["answer"] and facts.rupees(high) in body["answer"]
 
 
 def test_world_cup_is_refused(client):

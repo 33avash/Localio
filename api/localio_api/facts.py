@@ -48,6 +48,25 @@ def _locality(p: dict) -> Locality:
     return Locality(p["name"], tuple(p["aliases"]), confident, p, card(p, confident))
 
 
+def rupees(value: float) -> str:
+    """As the map writes them: ₹45k, ₹4.2L."""
+    sign, value = ("-" if value < 0 else ""), abs(value)
+    if value >= 1e5:
+        return f"{sign}₹{value / 1e5:.1f}L"
+    return f"{sign}₹{round(value / 1e3)}k" if value >= 1e3 else f"{sign}₹{round(value)}"
+
+
+def money(p: dict, category: str) -> str:
+    """The pipeline's projection at the default assumptions (a small outlet
+    of the default size, at the baseline rent)."""
+    m = p["economics"][category]
+    one = FORMATS[category][0]
+    payback = f"pays back in about {round(m['payback'][1])} months" if m["payback"] else m["payback_note"]
+    return (f"A small {one} here projects {rupees(m['revenue'][0])} to {rupees(m['revenue'][2])} revenue and "
+            f"{rupees(m['profit'][0])} to {rupees(m['profit'][2])} profit a month (p10 to p90), with rent at "
+            f"{m['rent_burden'][1]:.0%} of revenue; it {payback}.")
+
+
 def card(p: dict, confident: bool) -> str:
     places = f" It takes in {', '.join(p['aliases'][:5])}." if p["aliases"] else ""
     sentences = [
@@ -62,6 +81,9 @@ def card(p: dict, confident: bool) -> str:
     expected = round(p["total_pois"] + p["capacity"]["gap"])
     sentences.append(f"Its surroundings support {mid:.1f} times the city's median ward (80% range {low:.1f} to "
                      f"{high:.1f}); wards like it hold about {expected} outlets.")
+    sentences += [money(p, category) for category in FORMATS]
+    tier = f"{p['rent']['tier']} rent tier" + (" (estimated from its zone)" if p["rent"]["estimated"] else "")
+    sentences.append(f"It sits in the {tier}.")
     top_menu = sorted(p["menu"].items(), key=lambda item: -item[1])[:3]
     if top_menu:
         sentences.append("Most common menus: " + ", ".join(f"{kind.lower()} {share:.0%}" for kind, share in top_menu) + ".")

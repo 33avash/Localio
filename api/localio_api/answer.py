@@ -11,7 +11,7 @@ import logging
 
 import httpx
 
-from localio_api.facts import FORMATS, LENSES
+from localio_api.facts import FORMATS, LENSES, money
 from localio_api.plan import REFUSAL, Plan
 
 log = logging.getLogger("localio.ask")
@@ -23,6 +23,7 @@ INSTRUCTIONS = (
     "You answer questions about where to open a cafe or quick-service restaurant (QSR) in Pune. "
     "Use only the facts given below; never add numbers or places that aren't in them. "
     "Answer in at most three short sentences, plainly, with the figures that matter. "
+    "Money figures are projections at default assumptions: give them as ranges, never as a single number. "
     "List in 'cited' exactly the locality names your answer relies on, spelled as in the facts."
 )
 SCHEMA = {
@@ -102,4 +103,5 @@ def _estimate(plan: Plan) -> str:
 def _about(loc, plan: Plan) -> str:
     p = loc.properties
     counts = ", ".join(f"{p['categories'][c]['count']} {FORMATS[c][1]}" for c in FORMATS)
-    return f"{loc.name} has {p['population']:,} residents and {counts}. {p['recommendation']}"
+    money_line = money(p, plan.category or "cafe")
+    return f"{loc.name} has {p['population']:,} residents and {counts}. {p['recommendation']} {money_line}"
