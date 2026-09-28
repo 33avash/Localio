@@ -10,6 +10,7 @@ The code in this repository is MIT licensed (see [LICENSE](LICENSE)). The data a
 | Meta High Resolution Settlement Layer v1.5.2 | population per catchment (`seed_data/catchments.geojson`) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). © Meta Platforms and CIESIN, Columbia University. |
 | OpenStreetMap | basemap tiles | [ODbL](https://www.openstreetmap.org/copyright). Attribution is shown on the map. |
 | CARTO basemaps (optional) | Positron tiles when a key is set | [CARTO basemap terms](https://carto.com/basemaps). Attribution is shown on the map. |
+| Google Gemini API (optional) | writing chat answers when a key is set | [Gemini API terms](https://ai.google.dev/gemini-api/terms). Free-tier prompts may be used to improve Google's products. |
 
 ## Tools
 
@@ -26,4 +27,12 @@ The code in this repository is MIT licensed (see [LICENSE](LICENSE)). The data a
 | nginx | web server | BSD 2-Clause |
 | Leaflet 1.9.4 | the map | BSD 2-Clause |
 | IBM Plex Sans and Mono | typefaces | SIL Open Font License 1.1 |
+| scikit-learn and SciPy | footfall model, market types | BSD 3-Clause |
+| FastAPI | chat API | MIT |
+| Uvicorn | ASGI server | BSD 3-Clause |
+| httpx | calls to Gemini | BSD 3-Clause |
+| fastembed | runs the embedding model | Apache 2.0 |
+| BAAI/bge-small-en-v1.5 | embedding model | MIT |
+| ONNX Runtime | model runtime under fastembed | MIT |
+| pytest | tests | MIT |
 | GitHub Actions | CI | GitHub terms (hosted service) |

@@ -45,12 +45,12 @@ Open http://localhost:8080 once the `data` container has exited. Its log should 
         wrote       output/localities.geojson (51 features)
 ```
 
-The map works as it is. For the quieter CARTO Positron basemap, get a free key at [carto.com/basemaps](https://carto.com/basemaps), then:
+Everything works without any keys. Two are optional, set in `.env` (copy `.env.example`):
 
-```
-cp .env.example .env        # then paste the key into LOCALIO_CARTO_KEY
-docker compose up -d web
-```
+- `LOCALIO_CARTO_KEY`, free from [carto.com/basemaps](https://carto.com/basemaps), for the quieter CARTO Positron basemap.
+- `GEMINI_API_KEY`, free from [Google AI Studio](https://aistudio.google.com/apikey), so Gemini Flash writes the chat's answers instead of templates. Google may use free-tier prompts to improve its products; Localio sends only the question and public locality figures.
+
+After changing `.env`, run `docker compose up -d web api`.
 
 ## Using it
 
@@ -62,16 +62,19 @@ The panel walks you through three steps, and the map follows along.
 
 Click any area, numbered marker or shortlist row to open its **detail drawer**. It has residents and residents per outlet against the city median, both formats side by side, the menu mix, chains against independents, the late-night share, and the footfall model's estimate with its range and what drives it. It ends with a one-sentence recommendation. **How it works**, at the top of the panel, shows what each model does and how it was checked.
 
+4. **Ask.** Type a question ("Is Baner a good place for a QSR?", "Which areas have no cafes yet?"). Answers use only Localio's numbers, and the localities they rely on appear as chips that open the drawer. Questions that aren't about opening a cafe or QSR in Pune get a polite refusal instead of an invented answer.
+
 Completed steps in the rail at the top of the panel take you back. On a phone the panel is a sheet under the map; drag its handle to resize it.
 
 The URL keeps your place (for example `#shortlist/qsr/footfall`), so a shortlist can be bookmarked or sent to someone.
 
 ## How it works
 
-Two containers, run with Docker Compose (diagram in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
+Three containers, run with Docker Compose (diagram in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
 
 - `data/` reads the seed file, cleans it, aggregates by locality, joins each locality's catchment and population, scores each locality and writes GeoJSON to `./output/`. It then exits.
 - `web/` is nginx. It serves the map from `web/static/` and the files in `./output/` at `/data/`. It only starts after `data` exits successfully, so it never serves a map without numbers.
+- `api/` is a FastAPI service for the chat, proxied by nginx at `/api/`. It reads the same `./output/` files. nginx resolves it per request, so if `api` is down the map still works and the chat says so.
 
 A third service, `catchments`, rebuilds the population file. It needs network access, so it sits behind a Compose profile and never runs on `docker compose up`.
 
@@ -119,7 +122,9 @@ For each locality the model is asked about a standard new independent outlet (pr
 
 **2. Market types: "what kind of market is this, and where else is like it?"** k-means groups the 51 localities by outlets per head, chain share, price, late-night share, rating, predicted demand and cafe share. k runs from 3 to 6 and is chosen by silhouette score; that gives 5 types, but a silhouette of 0.24 means the groups overlap a lot. They describe the city, they don't predict anything. Each locality also lists the three localities with the most similar profile.
 
-**3. Retrieval for the chat (planned).** A small open embedding model will match questions to locality facts and turn away questions that aren't about opening a cafe or QSR in Pune.
+**3. Retrieval and refusal for the chat.** Each locality becomes a short card of plain sentences built from its numbers. An open embedding model (`BAAI/bge-small-en-v1.5`, run with fastembed on ONNX, no GPU) turns the cards and each question into vectors. A question is answered only if it names a locality, uses a domain word (cafe, QSR, footfall, competition…), or sits close to some locality's card. "Best area for…" and "no cafes yet" questions are answered from the scores, because similarity can't rank by a number. Everything else uses the closest cards. Gemini Flash then writes up to three sentences from those cards only; any locality it cites that wasn't retrieved is dropped. With no key, or if Gemini fails, the answer comes from templates over the same cards.
+
+It's checked on 41 labelled questions in `api/tests/ask_cases.jsonl`. All 11 off-topic ones are refused, and all 30 on-topic ones cite an expected locality. The most similar off-topic question ("What's the weather in Pune today?") scores 0.53 against the cards, below the 0.62 floor. `docker compose run --rm api python -m localio_api.evaluate` reruns it.
 
 Menu types (coffee, chai, burgers and so on) are tagged by rules, not a model: a table for 36 of the 37 chain brands (Platesman is left to the name rules rather than guessed) and keywords in outlet names. 2.7% of outlets end up as "Other".
 
@@ -150,6 +155,8 @@ One row in the source is blank, and the pipeline drops it and logs why. That lea
 **The page says it has to be served over HTTP.** You opened `web/static/index.html` straight from disk. Browsers block module scripts and `fetch()` on `file://`, so the page can't load its code or its data. Use http://localhost:8080.
 
 **"Could not load map data".** The `data` container hasn't finished, or it failed a check. `docker compose logs data` shows which. A failed check exits non-zero and writes nothing, and `web` won't start in that case.
+
+**The chat says it isn't reachable.** The `api` container isn't running or is still starting (it takes a few seconds to load the embedding model). `docker compose ps` shows it; `docker compose logs api` says why.
 
 **Port 8080 is taken.** Pick another port: `LOCALIO_PORT=8090 docker compose up`, or set `LOCALIO_PORT` in `.env`.
 

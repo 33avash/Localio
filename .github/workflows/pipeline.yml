@@ -19,9 +19,9 @@ jobs:
       - name: Unit and pipeline tests
         run: docker compose run --rm data python -m pytest -q -p no:cacheprovider tests
 
-      - name: Build, run the pipeline and start the site
-        # web waits for data to exit 0, so this fails if any check fails.
-        run: docker compose up --build --detach web
+      - name: Build, run the pipeline and start the site and the API
+        # web and api wait for data to exit 0, so this fails if any check fails.
+        run: docker compose up --build --detach web api
 
       - name: Pipeline log
         if: always()
@@ -43,6 +43,20 @@ jobs:
             | python3 -c "import json, sys; n = len(json.load(sys.stdin)['features']); print(n, 'outlets'); assert n == 259"
           curl -fsS http://localhost:8080/data/model_report.json             | python3 -c "import json, sys; r = json.load(sys.stdin)['footfall']; print('demand from', r['demand_source'])"
           curl -fsS http://localhost:8080/config.json
+
+      - name: API tests and the labelled chat questions
+        run: |
+          docker compose run --rm --no-deps api python -m pytest -q -p no:cacheprovider tests
+          docker compose run --rm --no-deps api python -m localio_api.evaluate
+
+      - name: Chat answers through nginx
+        run: |
+          for attempt in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:8080/api/health && break
+            sleep 2
+          done
+          curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json'             -d '{"question": "Tell me about Koregaon Park"}'             | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['cited'] == ['Koregaon Park']"
+          curl -fsS -X POST http://localhost:8080/api/ask -H 'Content-Type: application/json'             -d '{"question": "who won the world cup"}'             | python3 -c "import json, sys; r = json.load(sys.stdin); print(r['answer']); assert r['refused']"
 
       - name: Stop
         if: always()

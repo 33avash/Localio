@@ -54,6 +54,16 @@ A running log of the choices behind Localio and why they were made. Newest last.
 
 **Menu types by rules.** The seed has no cuisine field. A brand table plus name keywords is transparent and testable. A model trained on 259 names, with no labels to check it against, wouldn't be.
 
-## Planned
+## Chat
 
-**Chat works without a key.** Gemini Flash writes answers when `GEMINI_API_KEY` is set. Otherwise the API returns templated answers from the same retrieved facts, so tests, CI and a fresh clone don't need a secret.
+**Decide the question type before any model writes.** (2026-09-26) Embedding similarity is good at "tell me about places like this" and bad at "which place scores highest", so ranking and gap questions are answered from the scores. Only open-ended questions go to retrieval.
+
+**Refuse by rules first, similarity last.** A locality name or a domain word puts a question in scope. Otherwise it needs a similarity of at least 0.62 to some locality card. On the 41 labelled questions, the most similar off-topic one scores 0.53, and all 11 off-topic ones are refused.
+
+**Gemini only rewrites retrieved facts.** It gets the fact cards and nothing else, must return JSON with its citations, and any citation that wasn't retrieved is dropped. No valid citation means the template answer is used instead, so an answer can't name a place the data doesn't back.
+
+**Chat works without a key.** Gemini Flash writes answers when `GEMINI_API_KEY` is set. Otherwise the API returns templated answers from the same retrieved facts, so tests, CI and a fresh clone don't need a secret. The free tier may use prompts to improve Google's products, so only the question and public locality figures are sent.
+
+**fastembed over sentence-transformers.** The same `bge-small` model runs on ONNX Runtime without PyTorch, which keeps the image at 645 MB instead of several gigabytes. The model is baked into the image at build time, so the container starts offline.
+
+**nginx resolves the API per request.** With a plain `proxy_pass http://api:8000`, nginx refuses to start if `api` is missing, and the map would go down with the chat.

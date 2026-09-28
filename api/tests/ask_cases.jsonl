@@ -1,0 +1,41 @@
+{"question": "Tell me about Koregaon Park", "expect": ["Koregaon Park"]}
+{"question": "Is Baner a good place for a QSR?", "expect": ["Baner"]}
+{"question": "How crowded is Wakad with cafes?", "expect": ["Wakad"]}
+{"question": "Compare Aundh and Kothrud for a cafe", "expect": ["Aundh", "Kothrud"]}
+{"question": "Where should I open a cafe?", "expect": ["Deccan Gymkhana", "Shivajinagar", "Sadashiv Peth", "Camp", "Koregaon Park"]}
+{"question": "Where should I open a QSR?", "expect": ["Deccan Gymkhana", "Shivajinagar", "Koregaon Park", "Camp", "Kalyani Nagar"]}
+{"question": "Which areas have no cafes yet?", "expect": ["Sadashiv Peth"]}
+{"question": "Which localities have no QSRs?", "expect": ["Baner", "Hadapsar", "Hinjewadi", "Kharadi", "Wanowrie"]}
+{"question": "Best area for a QSR with low competition", "expect": ["Koregaon Park", "Kalyani Nagar", "Camp", "Viman Nagar", "Wanowrie"]}
+{"question": "Where are cafes poorly rated?", "expect": ["Deccan Gymkhana", "Shivajinagar", "Camp", "Sadashiv Peth", "Koregaon Park"]}
+{"question": "How many people live in Hinjewadi?", "expect": ["Hinjewadi"]}
+{"question": "What's the cafe scene like in Viman Nagar", "expect": ["Viman Nagar"]}
+{"question": "Should I open a burger joint in Kharadi?", "expect": ["Kharadi"]}
+{"question": "Is Deccan Gymkhana too crowded for another coffee shop?", "expect": ["Deccan Gymkhana"]}
+{"question": "Which neighbourhood is most like Kalyani Nagar?", "expect": ["Kalyani Nagar"]}
+{"question": "Late-night food options in Camp", "expect": ["Camp"]}
+{"question": "Recommend a locality for a chai stall", "expect": ["Deccan Gymkhana", "Shivajinagar", "Sadashiv Peth", "Camp", "Koregaon Park"]}
+{"question": "Top places for a pizza outlet", "expect": ["Deccan Gymkhana", "Shivajinagar", "Koregaon Park", "Camp", "Kalyani Nagar"]}
+{"question": "Tell me about Magarpatta", "expect": ["Magarpatta"]}
+{"question": "What do people eat in Shivajinagar?", "expect": ["Shivajinagar"]}
+{"question": "Is Hadapsar under-served for QSRs?", "expect": ["Hadapsar"]}
+{"question": "Where is footfall strongest for a new cafe?", "expect": ["Deccan Gymkhana", "Shivajinagar", "Sadashiv Peth", "Camp", "Koregaon Park"]}
+{"question": "Best place to open a restaurant", "expect": ["Deccan Gymkhana", "Shivajinagar", "Sadashiv Peth", "Camp", "Koregaon Park"]}
+{"question": "Which area has the fewest competitors for a QSR?", "expect": ["Koregaon Park", "Kalyani Nagar", "Camp", "Viman Nagar", "Wanowrie"]}
+{"question": "How many cafes are in Aundh?", "expect": ["Aundh"]}
+{"question": "Nigdi or Pimpri for a cafe?", "expect": ["Nigdi", "Pimpri"]}
+{"question": "Any gaps for QSRs left in the city?", "expect": ["Baner", "Hadapsar", "Hinjewadi", "Kharadi", "Wanowrie"]}
+{"question": "What's the rating of cafes in Dhanori?", "expect": ["Dhanori"]}
+{"question": "Tell me about Lohegaon", "expect": ["Lohegaon"]}
+{"question": "Where would a new fast food outlet do well?", "expect": ["Deccan Gymkhana", "Shivajinagar", "Koregaon Park", "Camp", "Kalyani Nagar"]}
+{"question": "who won the world cup", "expect": "refuse"}
+{"question": "What's the weather in Pune today?", "expect": "refuse"}
+{"question": "write me a poem about the sea", "expect": "refuse"}
+{"question": "best laptop under 50000", "expect": "refuse"}
+{"question": "What is the capital of France?", "expect": "refuse"}
+{"question": "How do I fix a Python import error?", "expect": "refuse"}
+{"question": "tell me a joke", "expect": "refuse"}
+{"question": "Who is the prime minister of India?", "expect": "refuse"}
+{"question": "Translate hello into Hindi", "expect": "refuse"}
+{"question": "Recommend a good movie for tonight", "expect": "refuse"}
+{"question": "How do I open a bank account?", "expect": "refuse"}
