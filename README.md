@@ -8,7 +8,23 @@ It answers one question, end to end: **"I want to open a cafe (or QSR) in Pune. 
 
 This is not a general-purpose map dashboard. Every screen moves you toward a ranked, justified shortlist of localities.
 
-![The shortlist step: five Pune localities ranked for a new cafe, each with a score and a one-line reason, and numbered markers on the map](docs/screenshot.png)
+![The shortlist step: five Pune localities ranked for a new cafe, each with a score and a one-line reason, and numbered markers over a map of catchments shaded by cafes per 10,000 residents](docs/screenshot.png)
+
+## Scope
+
+**In:** Pune cafes and QSRs; 51 localities; a reproducible containerised pipeline from seed CSV to a scored map; a guided flow that ends in a ranked, explained top 5.
+
+**Out:** other cities and categories, rent and footfall counts from paid sources, and anything live. The seed is a one-off snapshot, so Localio says where the gaps were on 18 September 2026, not where they are today.
+
+## Status
+
+| | What | State |
+|---|---|---|
+| v1 | Pipeline with validation, two-container Compose setup, three-step map | done |
+| v2 part A | Catchments with population, choropleth, fitted map, marker collision, fixed panel footer | done, in review |
+| v2 part B | Footfall model and market types (scikit-learn), detail drawer, chat over the localities, test harness, `make verify` | in progress for the final submission |
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has diagrams of the current and planned setup. [DECISIONS.md](DECISIONS.md) logs the choices behind it.
 
 ## Run it
 
@@ -41,17 +57,21 @@ docker compose up -d web
 The panel walks you through three steps, and the map follows along.
 
 1. **What are you opening?** Pick cafe or QSR. The map shows every outlet of that kind, with the other kind in grey so you can see where people already go to eat.
-2. **What matters most?** Pick a lens: low competition, proven footfall or weak incumbents. The map switches to one circle per locality, sized by how many of your format are there and coloured by how saturated it is.
-3. **Your shortlist.** The top five localities for that lens, each with a score and a one-line reason built from its numbers. Click a row to fly to it. You can switch lenses here and the list re-ranks on the spot.
+2. **What matters most?** Pick a lens: low competition, proven footfall or weak incumbents. The map shades each locality's catchment by how many of your format there are per 10,000 residents. Hatched areas have too few outlets to score.
+3. **Your shortlist.** The top five localities for that lens, each with a score and a one-line reason built from its numbers. Click a row to fly to it; hover one to find its marker. You can switch lenses here and the list re-ranks on the spot.
+
+Completed steps in the rail at the top of the panel take you back. On a phone the panel is a sheet under the map; drag its handle to resize it.
 
 The URL keeps your place (for example `#shortlist/qsr/footfall`), so a shortlist can be bookmarked or sent to someone.
 
 ## How it works
 
-Two containers, run with Docker Compose:
+Two containers, run with Docker Compose (diagram in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
 
-- `data/` reads the seed file, cleans it, aggregates by locality, scores each locality and writes GeoJSON to `./output/`. It then exits.
+- `data/` reads the seed file, cleans it, aggregates by locality, joins each locality's catchment and population, scores each locality and writes GeoJSON to `./output/`. It then exits.
 - `web/` is nginx. It serves the map from `web/static/` and the files in `./output/` at `/data/`. It only starts after `data` exits successfully, so it never serves a map without numbers.
+
+A third service, `catchments`, rebuilds the population file. It needs network access, so it sits behind a Compose profile and never runs on `docker compose up`.
 
 `./output/` is a bind mount, not a named volume. A named volume keeps the previous run's files, and the map would quietly show stale numbers. For the same reason nginx sends `/data/` with `Cache-Control: no-store`.
 
@@ -75,7 +95,7 @@ The map lets you swap those weights for one of three lenses (low competition, pr
 
 Only localities with at least 4 cafes and QSRs combined are scored. Below that, one extra outlet swings the numbers too much to mean anything. Those localities still appear on the map, marked as not enough data.
 
-Each locality also gets a **saturation tier** per category: none, low, medium or high. The cut points are the 40th and 75th percentiles of non-zero counts, worked out separately for cafes and QSRs. For cafes that comes to 1–3 low, 4–7 medium and 8+ high. QSRs are sparser: 1 low, 2–3 medium, 4+ high.
+The map shades each catchment by **outlets per 10,000 residents** rather than raw counts, because 8 cafes among 300,000 people is a thinner market than 5 among 20,000. Non-zero values fall into five quantile classes, worked out separately for cafes, QSRs and both together. Zero gets its own grey class: "none yet" is an answer, not the bottom of a scale.
 
 ### Why localities, not grid cells
 
@@ -87,7 +107,7 @@ Deccan Gymkhana has 121,097 reviews across its outlets. The next highest, Korega
 
 ### Checking the numbers
 
-A wrong aggregation still draws a map that looks perfectly fine. So the pipeline checks its own output against known figures before writing anything: 259 POIs, 51 localities, 165 cafes and 94 QSRs, 23 scored localities, and the top three for each category. If any check fails it exits with an error and writes nothing. The expected values live in [data/localio/validate.py](data/localio/validate.py); update them if you swap in a different dataset.
+A wrong aggregation still draws a map that looks perfectly fine. So the pipeline checks its own output against known figures before writing anything: 259 POIs, 51 localities, 165 cafes and 94 QSRs, a catchment with people in it for every locality, 23 scored localities, and the top three for each category. If any check fails it exits with an error and writes nothing. The expected values live in [data/localio/validate.py](data/localio/validate.py); update them if you swap in a different dataset.
 
 ## Data
 
@@ -96,6 +116,8 @@ A wrong aggregation still draws a map that looks perfectly fine. So the pipeline
 It was exported once from the original spreadsheet so that changes show up in diffs. Excel date serials became ISO dates and day-fraction times became `HH:MM`; no values were altered. The pipeline still reads `.xlsx` directly if you point it at one.
 
 One row in the source is blank, and the pipeline drops it and logs why. That leaves 259 POIs: 165 cafes and 94 QSRs.
+
+`seed_data/catchments.geojson` gives each locality an area and a population. The area is its Voronoi cell, cut back to within 2 km of its own outlets; OpenStreetMap has no municipal boundary for Pune to clip to. The population comes from Meta's High Resolution Settlement Layer (30 m cells, CC BY 4.0): 5.15 million people across the 51 catchments. [seed_data/SOURCES.md](seed_data/SOURCES.md) explains how the file is built and how to rebuild it.
 
 ## Troubleshooting
 
@@ -111,4 +133,4 @@ One row in the source is blank, and the pipeline drops it and logs why. That lea
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+The code is MIT. See [LICENSE](LICENSE). The data and tools come under their own terms, listed in [DATA_LICENSES.md](DATA_LICENSES.md). In particular, the Google Places seed is included for coursework and is not MIT licensed.
