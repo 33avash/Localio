@@ -20,10 +20,11 @@ export const LENSES = {
   },
 };
 
+// Every locality has a score; the ones with fewer than 4 outlets are
+// low-confidence and kept off the shortlist.
 export function score(properties, category, weights) {
-  if (properties.status !== "scored") return null;
-  const { supply_n, weakness_n } = properties.categories[category];
-  return 100 * (weights.demand * properties.demand_n - weights.supply * supply_n + weights.weakness * weakness_n);
+  const { demand_n, supply_n, weakness_n } = properties.categories[category];
+  return 100 * (weights.demand * demand_n - weights.supply * supply_n + weights.weakness * weakness_n);
 }
 
 export function rank(localities, category, lens) {
@@ -41,21 +42,26 @@ export function cityRating(pois, category) {
   return ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
 }
 
+// Above this multiple of the city median, competition counts as heavy.
+// The pipeline's recommendation sentence uses the same line.
+const CROWDED = 1.5;
+
 // One line per pick, built from that locality's own numbers. It leads with
 // whichever term adds the most to the score under the current lens, and
-// every word in it ("thin", "strong") is backed by a threshold.
-export function rationale(properties, category, lens, averageRating) {
+// every word in it ("thin", "strong") is backed by a threshold. Competition
+// is judged against the city median per 10,000 residents.
+export function rationale(properties, category, lens, { averageRating, cityPer10k }) {
   const { weights } = LENSES[lens];
   const stats = properties.categories[category];
   const outlets = `${num(properties.total_pois)} F&amp;B outlets`;
-  const footfall = ["light", "steady", "strong"][third(properties.demand_n)];
+  const footfall = ["light", "steady", "strong"][third(stats.demand_n)];
 
   if (stats.count === 0) {
     return `${outlets} and no ${CATEGORIES[category].one} yet — ${footfall} footfall, no direct competition.`;
   }
 
   const pull = {
-    demand: weights.demand * properties.demand_n,
+    demand: weights.demand * stats.demand_n,
     gap: weights.supply * (1 - stats.supply_n),
     weakness: weights.weakness * stats.weakness_n,
   };
@@ -68,7 +74,7 @@ export function rationale(properties, category, lens, averageRating) {
     return `${counted(stats.count, category)} averaging ${num(rating)}★, ` +
       `below the ${num(cityAverage)}★ city average — room to beat the incumbents.`;
   }
-  const competition = ["thin", "moderate", "heavy"][third(stats.supply_n)];
+  const competition = stats.per_10k <= cityPer10k ? "thin" : stats.per_10k <= CROWDED * cityPer10k ? "moderate" : "heavy";
   if (competition === "thin") {
     return `${outlets} nearby but only ${counted(stats.count, category)} — ${footfall} footfall, thin competition.`;
   }

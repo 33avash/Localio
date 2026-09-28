@@ -121,7 +121,7 @@ export function createMap(element, { cartoKey }) {
 
   // One filled catchment per locality. The areas tile rather than overlap,
   // so every colour on the map is a colour in the legend. Localities with
-  // too few outlets to score get a hatch on top.
+  // too few outlets for a confident score get a hatch on top.
   function drawAreas(view) {
     const shortlisted = view.step === 3;
     for (const locality of view.localities) {
@@ -262,7 +262,7 @@ function legendHtml(view, outletsOn, open) {
     ...(picks.length ? [legendRow('<span class="swatch top-pick"></span>', "Your top 5")] : []),
     ...classes,
     ...(ranges[0] ? [legendRow(swatch(DENSITY[0]), "None yet")] : []),
-    legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_pois_to_score)} outlets, not scored`),
+    legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_pois_to_score)} outlets, low confidence`),
   ];
   const what = category ? CATEGORIES[category].many : "cafes and QSRs";
   return `

@@ -7,12 +7,14 @@ update EXPECTED to match it.
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from localio import CATEGORIES
 from localio.score import ranked
 
 LABELS = {"cafe": "cafe", "fast_food": "QSR"}
+MAX_OTHER_MENU = 0.08
 
 EXPECTED = {
     "pois": 259,
@@ -72,3 +74,28 @@ def check_scores(scored: pd.DataFrame) -> list[Check]:
 
 def _scored_note(scored: pd.DataFrame) -> str:
     return f"{int(scored['scored'].sum())} of {len(scored)} localities"
+
+
+def check_v2(scored: pd.DataFrame) -> list[Check]:
+    """Every v2 score must be a real number in [-100, 100]; low confidence is counted, not hidden."""
+    columns = [f"{c}_score" for c in CATEGORIES]
+    values = scored[columns].to_numpy(dtype=float)
+    valid = int((np.isfinite(values) & (np.abs(values) <= 100)).sum())
+    low = int(scored["low_confidence"].sum())
+    return [
+        Check("scores v2", valid, values.size, shown=f"{valid} of {values.size} finite and within ±100"),
+        Check("low conf.", low, low, shown=f"{low} of {len(scored)} localities have under 4 outlets"),
+    ]
+
+
+def check_menu(types: pd.Series) -> list[Check]:
+    other = float((types == "Other").mean())
+    return [Check("menu other", other < MAX_OTHER_MENU, True, shown=f"{other:.1%} of outlets (limit {MAX_OTHER_MENU:.0%})")]
+
+
+def check_sentences(sentences: pd.Series) -> list[Check]:
+    """A "{" left in a sentence means a template slot was never filled."""
+    unfilled = int(sentences.str.contains(r"[{}]").sum())
+    empty = int((sentences.str.len() == 0).sum())
+    return [Check("sentences", unfilled + empty, 0, shown=f"{len(sentences)} written, none with unfilled slots"
+                  if unfilled + empty == 0 else f"{unfilled} unfilled, {empty} empty")]

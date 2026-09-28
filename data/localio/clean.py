@@ -11,7 +11,16 @@ import pandas as pd
 from localio import CATEGORIES
 
 KEY_COLUMNS = ("latitude", "longitude", "category", "locality")
-NUMERIC_COLUMNS = ("latitude", "longitude", "avg_rating", "review_count", "is_chain_outlet")
+NUMERIC_COLUMNS = (
+    "latitude",
+    "longitude",
+    "avg_rating",
+    "review_count",
+    "is_chain_outlet",
+    "price_level",
+    "daily_open_hours",
+    "is_late_night",
+)
 TEXT_COLUMNS = ("name", "category", "locality")
 
 

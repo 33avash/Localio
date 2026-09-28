@@ -22,7 +22,7 @@ export function localityPopup(properties, { category, lens }) {
   const residents = `${num(compact(properties.population))} residents`;
   const summary = properties.status === "scored"
     ? `${residents} · ${outlets} · ${num(compact(properties.total_reviews))} reviews`
-    : `${residents} · ${outlets} · too few to score`;
+    : `${residents} · ${outlets} · low confidence`;
   const points = category && lens ? score(properties, category, LENSES[lens].weights) : null;
   const scoreLine = points === null
     ? ""
