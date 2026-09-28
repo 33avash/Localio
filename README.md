@@ -8,6 +8,8 @@ It answers one question, end to end: **"I want to open a cafe (or QSR) in Pune. 
 
 This is not a general-purpose map dashboard. Every screen moves you toward a ranked, justified shortlist of localities.
 
+![The shortlist step: five Pune localities ranked for a new cafe, each with a score and a one-line reason, and numbered markers on the map](docs/screenshot.png)
+
 ## Run it
 
 You need Docker with Compose v2.
