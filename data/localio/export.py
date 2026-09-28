@@ -81,6 +81,9 @@ def _locality_properties(name: str, row: pd.Series) -> dict:
         "status": "scored" if row["scored"] else "insufficient_data",
         "total_pois": int(row["total_pois"]),
         "total_reviews": int(row["total_reviews"]),
+        "population": int(row["population"]),
+        "area_km2": _num(row["area_km2"], 2),
+        "label_point": [_num(row["label_longitude"], 5), _num(row["label_latitude"], 5)],
         "demand_n": _num(row["demand_n"]),
         "categories": categories,
     }
