@@ -1,7 +1,8 @@
 """Score the chat's planning on the labelled questions: python -m localio_api.evaluate
 
 For each question in tests/ask_cases.jsonl it checks that off-topic ones
-are refused and that on-topic ones cite at least one expected locality.
+are refused and that on-topic ones cite at least one expected ward (or,
+when none is expected, cite none).
 It also prints the best and worst similarity scores on each side of the
 refusal threshold, which is how SIMILARITY_FLOOR was chosen.
 """
@@ -18,24 +19,27 @@ CASES = Path(__file__).resolve().parent.parent / "tests" / "ask_cases.jsonl"
 
 
 def evaluate() -> dict:
-    localities = facts.load(DATA)
+    wards = facts.load(DATA)
     embedder = Embedder()
-    cards = embedder.documents([loc.card for loc in localities])
+    cards = embedder.documents([ward.card for ward in wards])
     cases = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
 
     results, misses = {"refusals": [0, 0], "citations": [0, 0]}, []
     top_similarity = {"in scope": [], "off topic": []}
     for case in cases:
         similarities = cards @ embedder.query(case["question"])
-        decided = plan(case["question"], localities, similarities, case.get("category"))
-        cited = {loc.name for loc in decided.localities}
+        decided = plan(case["question"], wards, similarities, case.get("category"))
+        cited = {ward.name for ward in decided.wards}
         if case["expect"] == "refuse":
             ok = decided.kind == "refuse"
             results["refusals"][0] += ok
             results["refusals"][1] += 1
             top_similarity["off topic"].append(float(similarities.max()))
         else:
-            ok = decided.kind != "refuse" and bool(cited & set(case["expect"]))
+            # An empty list means the right answer names no ward ("every ward
+            # already has one").
+            expected = set(case["expect"])
+            ok = decided.kind != "refuse" and (bool(cited & expected) if expected else not cited)
             results["citations"][0] += ok
             results["citations"][1] += 1
             top_similarity["in scope"].append(float(similarities.max()))

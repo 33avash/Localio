@@ -1,9 +1,9 @@
-"""Turn the pipeline's localities.geojson into facts the chat can cite.
+"""Turn the pipeline's wards.geojson and rent.json into facts the chat can cite.
 
 Each of the 140 wards becomes one short card of plain sentences built from
 its numbers. The card is what gets embedded for retrieval and what the
-language model is allowed to use, so an answer can only ever repeat
-figures the pipeline produced.
+language model is allowed to use, so an answer can only repeat figures the
+pipeline produced.
 """
 
 import json
@@ -12,81 +12,73 @@ from pathlib import Path
 
 FORMATS = {"cafe": ("cafe", "cafes"), "fast_food": ("QSR", "QSRs")}
 
-# The same three lenses as web/static/js/score.js.
+# The same three priorities as data/localio/score.py and web/static/js/score.js.
 LENSES = {
-    "competition": {"name": "low competition", "weights": {"demand": 0.30, "supply": 0.55, "gap": 0.15}},
-    "footfall": {"name": "proven footfall", "weights": {"demand": 0.60, "supply": 0.28, "gap": 0.12}},
-    "gap": {"name": "unmet demand", "weights": {"demand": 0.35, "supply": 0.30, "gap": 0.35}},
+    "busy": {"name": "busy areas", "weights": {"demand": 0.8, "competition": 0.2}},
+    "balanced": {"name": "a balance of footfall and competition", "weights": {"demand": 0.5, "competition": 0.5}},
+    "quiet": {"name": "low competition", "weights": {"demand": 0.2, "competition": 0.8}},
 }
-DEFAULT_LENS = "footfall"
+DEFAULT_LENS = "balanced"
 
 
 @dataclass(frozen=True)
-class Locality:
+class Ward:
     name: str
     aliases: tuple[str, ...]
     confident: bool
     properties: dict
+    rent: str
     card: str
 
     def score(self, category: str, lens: str = DEFAULT_LENS) -> float:
-        stats = self.properties["categories"][category]
         w = LENSES[lens]["weights"]
-        return 100 * (w["demand"] * stats["demand_n"] - w["supply"] * stats["supply_n"] + w["gap"] * stats["gap_n"])
+        competition = self.properties["categories"][category]["competition"]
+        return 100 * (w["demand"] * self.properties["demand"] + w["competition"] * (1 - competition))
 
     def count(self, category: str) -> int:
         return self.properties["categories"][category]["count"]
 
 
-def load(path: Path) -> list[Locality]:
-    features = json.loads(path.read_text(encoding="utf-8"))["features"]
-    return [_locality(feature["properties"]) for feature in features]
+def load(data: Path) -> list[Ward]:
+    """data is the pipeline's output directory."""
+    wards = json.loads((data / "wards.geojson").read_text(encoding="utf-8"))
+    rent = json.loads((data / "rent.json").read_text(encoding="utf-8"))
+    return [_ward(feature["properties"], rent, wards["meta"]["min_outlets"]) for feature in wards["features"]]
 
 
-def _locality(p: dict) -> Locality:
+def _ward(p: dict, rent: dict, min_outlets: int) -> Ward:
     confident = p["status"] == "scored"
-    return Locality(p["name"], tuple(p["aliases"]), confident, p, card(p, confident))
+    monthly = round(rent["typical_psf"] * p["rent"]["multiplier"] * rent["default_sqft"])
+    estimated = " (estimated from its zone)" if p["rent"]["estimated"] else ""
+    rent_text = (f"Rent is {p['rent']['tier']} tier{estimated}: about {rupees(monthly)} a month for a "
+                 f"{rent['default_sqft']} sq ft shop.")
+    return Ward(p["name"], tuple(p["aliases"]), confident, p, rent_text, card(p, confident, rent_text, min_outlets))
 
 
 def rupees(value: float) -> str:
     """As the map writes them: ₹45k, ₹4.2L."""
-    sign, value = ("-" if value < 0 else ""), abs(value)
     if value >= 1e5:
-        return f"{sign}₹{value / 1e5:.1f}L"
-    return f"{sign}₹{round(value / 1e3)}k" if value >= 1e3 else f"{sign}₹{round(value)}"
+        return f"₹{value / 1e5:.1f}L"
+    return f"₹{round(value / 1e3)}k" if value >= 1e3 else f"₹{round(value)}"
 
 
-def money(p: dict, category: str) -> str:
-    """The pipeline's projection at the default assumptions (a small outlet
-    of the default size, at the baseline rent)."""
-    m = p["economics"][category]
-    one = FORMATS[category][0]
-    payback = f"pays back in about {round(m['payback'][1])} months" if m["payback"] else m["payback_note"]
-    return (f"A small {one} here projects {rupees(m['revenue'][0])} to {rupees(m['revenue'][2])} revenue and "
-            f"{rupees(m['profit'][0])} to {rupees(m['profit'][2])} profit a month (p10 to p90), with rent at "
-            f"{m['rent_burden'][1]:.0%} of revenue; it {payback}.")
-
-
-def card(p: dict, confident: bool) -> str:
+def card(p: dict, confident: bool, rent_text: str, min_outlets: int) -> str:
     places = f" It takes in {', '.join(p['aliases'][:5])}." if p["aliases"] else ""
+    draws = p["draws"]
     sentences = [
-        f"{p['name']} is {p['corporation']} ward {p['ward_number']}, a {p['market_type'].lower()} "
-        f"with {p['population']:,} residents and {p['total_pois']} food and drink outlets.{places}"
-        + ("" if confident else " It has fewer than 4 outlets, so its scores are low confidence."),
+        f"{p['name']} is {p['corporation']} ward {p['ward_number']}, with {p['population']:,} residents and "
+        f"{p['total_pois']} food and drink outlets.{places}"
+        + ("" if confident else f" It has fewer than {min_outlets} outlets, so its scores are low confidence."),
+        f"Its demand index is {p['demand']:.2f} out of 1, from how densely people live, eat out, work, study "
+        f"and travel there; it has {draws['offices']} offices, {draws['colleges']} colleges and "
+        f"{draws['stations']} stations.",
     ]
-    for category, (one, many) in FORMATS.items():
+    for category, (_, many) in FORMATS.items():
         stats = p["categories"][category]
         sentences.append(f"It has {stats['count']} {many} ({stats['per_10k']:.2f} per 10,000 residents).")
-    low, mid, high = p["capacity"]["multiplier"]
-    expected = round(p["total_pois"] + p["capacity"]["gap"])
-    sentences.append(f"Its surroundings support {mid:.1f} times the city's median ward (80% range {low:.1f} to "
-                     f"{high:.1f}); wards like it hold about {expected} outlets.")
-    sentences += [money(p, category) for category in FORMATS]
-    tier = f"{p['rent']['tier']} rent tier" + (" (estimated from its zone)" if p["rent"]["estimated"] else "")
-    sentences.append(f"It sits in the {tier}.")
+    sentences.append(rent_text)
     top_menu = sorted(p["menu"].items(), key=lambda item: -item[1])[:3]
     if top_menu:
         sentences.append("Most common menus: " + ", ".join(f"{kind.lower()} {share:.0%}" for kind, share in top_menu) + ".")
-    sentences.append("Similar wards: " + ", ".join(p["similar"]) + ".")
     sentences.append(p["recommendation"])
     return " ".join(sentences)

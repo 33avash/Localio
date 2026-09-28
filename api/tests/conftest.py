@@ -9,7 +9,7 @@ from localio_api.main import DATA, app
 
 
 @pytest.fixture(scope="session")
-def localities():
+def wards():
     return facts.load(DATA)
 
 

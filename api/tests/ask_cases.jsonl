@@ -2,32 +2,32 @@
 {"question": "Is Baner a good place for a QSR?", "expect": ["Baner Balewadi"]}
 {"question": "How crowded is Wakad with cafes?", "expect": ["Bhujbal Chowk (PCMC 53)"]}
 {"question": "Compare Aundh and Kharadi for a cafe", "expect": ["Aundh ITI", "Kharadi Infotech Park"]}
-{"question": "Where should I open a cafe?", "expect": ["Model Colony", "Collectorate", "Kondhwa Budruk, Gokulnagar", "Balgandharva", "Shaniwarwada"]}
-{"question": "Where should I open a QSR?", "expect": ["Collectorate", "Model Colony", "Balgandharva", "Kondhwa Budruk, Gokulnagar", "Kamla Nehru Park"]}
-{"question": "Which areas have no cafes yet?", "expect": ["Near Chinchwad (PCMC 21)", "Chinchwad (PCMC 24)", "Near Ajmera (PCMC 27)", "Near Bhosari (PCMC 37)", "Near Kasarwadi (PCMC 56)", "Near Pimple Gurav (PCMC 62)", "Ganesh Nagar (PCMC 64)", "Vadgaon Sheri", "Vadgaon Sheri - Ganesh Nagar", "Popularnagar Malwadi", "Sadhana Vidyalay", "Kadakmal Ali Hirabaug", "Salisbury Park"]}
-{"question": "Which wards have no QSRs?", "expect": ["Pimple Gurav (PCMC 57)", "Bopodi Gaonthan", "Karvenagar - Gosavivasti", "Kasba Peth", "Mohammadwadi", "Janata Vasahat", "Kadakmal Ali Hirabaug", "Bhagyodaynagar"]}
-{"question": "Best area for a QSR with low competition", "expect": ["Kondhwa Budruk, Gokulnagar", "Collectorate", "Narveer Tanajiwadi", "Kasba Peth", "Shaniwarwada"]}
-{"question": "Where is demand unmet for cafes?", "expect": ["Kondhwa Budruk, Gokulnagar", "Narveer Tanajiwadi", "Model Colony", "Katraj Dairy", "Kadakmal Ali Hirabaug"]}
+{"question": "Where should I open a cafe?", "expect": ["Chinchwad (PCMC 24)", "Near Kasarwadi (PCMC 56)", "Mahatma Phule Mandai", "Tilak Smarak Mandir", "Janwadi-Gokhalenagar"]}
+{"question": "Where should I open a QSR?", "expect": ["Mahatma Phule Mandai", "Tilak Smarak Mandir", "Near Vinayak Nagar (PCMC 58)", "MIT - Kelewadi", "Agakhan Palace"]}
+{"question": "Which areas have no cafes yet?", "expect": ["Chinchwad (PCMC 24)", "Near Kasarwadi (PCMC 56)"]}
+{"question": "Which wards have no QSRs?", "expect": []}
+{"question": "Best area for a QSR with low competition", "expect": ["Mahatma Phule Mandai", "Tilak Smarak Mandir", "Agakhan Palace", "Near Vinayak Nagar (PCMC 58)", "Vimannagar Sanjay Park"]}
+{"question": "Where is demand unmet for cafes?", "expect": ["Chinchwad (PCMC 24)", "Near Kasarwadi (PCMC 56)", "Katraj Dairy", "Janwadi-Gokhalenagar", "Near Ajmera (PCMC 29)"]}
 {"question": "How many people live in Viman Nagar?", "expect": ["Vimannagar Sanjay Park"]}
 {"question": "What's the cafe scene like in Magarpatta", "expect": ["Magarpatta City"]}
 {"question": "Should I open a burger joint in Kharadi?", "expect": ["Kharadi Infotech Park"]}
 {"question": "Is Deccan Gymkhana too crowded for another coffee shop?", "expect": ["Kamla Nehru Park"]}
 {"question": "Which neighbourhood is most like Koregaon Park?", "expect": ["Koregaon Park"]}
 {"question": "Late-night food options in Katraj", "expect": ["Katraj Dairy", "Katraj Maulinagar"]}
-{"question": "Recommend a locality for a chai stall", "expect": ["Model Colony", "Collectorate", "Kondhwa Budruk, Gokulnagar", "Balgandharva", "Shaniwarwada"]}
-{"question": "Top places for a pizza outlet", "expect": ["Collectorate", "Model Colony", "Balgandharva", "Kondhwa Budruk, Gokulnagar", "Kamla Nehru Park"]}
+{"question": "Recommend a locality for a chai stall", "expect": ["Chinchwad (PCMC 24)", "Near Kasarwadi (PCMC 56)", "Mahatma Phule Mandai", "Tilak Smarak Mandir", "Janwadi-Gokhalenagar"]}
+{"question": "Top places for a pizza outlet", "expect": ["Mahatma Phule Mandai", "Tilak Smarak Mandir", "Near Vinayak Nagar (PCMC 58)", "MIT - Kelewadi", "Agakhan Palace"]}
 {"question": "Tell me about Nigdi", "expect": ["Nigdi (PCMC 13)"]}
 {"question": "What do people eat in Shivajinagar?", "expect": ["Model Colony"]}
 {"question": "Is Pimpri under-served for QSRs?", "expect": ["Pimpri (PCMC 44)"]}
-{"question": "Where is footfall strongest for a new cafe?", "expect": ["Model Colony", "Collectorate", "Kondhwa Budruk, Gokulnagar", "Balgandharva", "Shaniwarwada"]}
-{"question": "Best place to open a restaurant", "expect": ["Collectorate", "Model Colony", "Balgandharva", "Kondhwa Budruk, Gokulnagar", "Kamla Nehru Park"]}
-{"question": "Which area has the fewest competitors for a QSR?", "expect": ["Kondhwa Budruk, Gokulnagar", "Collectorate", "Narveer Tanajiwadi", "Kasba Peth", "Shaniwarwada"]}
+{"question": "Where is footfall strongest for a new cafe?", "expect": ["Mahatma Phule Mandai", "Chinchwad (PCMC 24)", "Tilak Smarak Mandir", "Near Kasarwadi (PCMC 56)", "Balgandharva"]}
+{"question": "Best place to open a restaurant", "expect": ["Chinchwad (PCMC 24)", "Near Kasarwadi (PCMC 56)", "Mahatma Phule Mandai", "Tilak Smarak Mandir", "Near Vinayak Nagar (PCMC 58)"]}
+{"question": "Which area has the fewest competitors for a QSR?", "expect": ["Mahatma Phule Mandai", "Tilak Smarak Mandir", "Agakhan Palace", "Near Vinayak Nagar (PCMC 58)", "Vimannagar Sanjay Park"]}
 {"question": "How many cafes are in Aundh?", "expect": ["Aundh ITI"]}
 {"question": "Balewadi or Aundh for a cafe?", "expect": ["Baner Balewadi", "Aundh ITI"]}
-{"question": "Any gaps for QSRs left in the city?", "expect": ["Pimple Gurav (PCMC 57)", "Bopodi Gaonthan", "Karvenagar - Gosavivasti", "Kasba Peth", "Mohammadwadi", "Janata Vasahat", "Kadakmal Ali Hirabaug", "Bhagyodaynagar"]}
+{"question": "Any gaps for QSRs left in the city?", "expect": []}
 {"question": "Tell me about Model Colony", "expect": ["Model Colony"]}
 {"question": "Tell me about Katraj Dairy", "expect": ["Katraj Dairy"]}
-{"question": "Where would a new fast food outlet do well?", "expect": ["Collectorate", "Model Colony", "Balgandharva", "Kondhwa Budruk, Gokulnagar", "Kamla Nehru Park"]}
+{"question": "Where would a new fast food outlet do well?", "expect": ["Mahatma Phule Mandai", "Tilak Smarak Mandir", "Near Vinayak Nagar (PCMC 58)", "MIT - Kelewadi", "Agakhan Palace"]}
 {"question": "who won the world cup", "expect": "refuse"}
 {"question": "What's the weather in Pune today?", "expect": "refuse"}
 {"question": "write me a poem about the sea", "expect": "refuse"}
