@@ -1,12 +1,13 @@
 """Read Localio's committed inputs from seed_data/. Nothing here goes online.
 
-wards/*.geojson        140 electoral wards: PMC 76 and PCMC 64 (DataMeet, 2012)
-wards/*.csv            PMC ward titles, admin wards and 2012 voter counts
-ward_population.csv    residents per ward, built by tools/geo/build_population.py
-osm_raw.json           food and drink places from OpenStreetMap
-osm_context.json       colleges, offices, stations, places, roads (OpenStreetMap)
-unit_economics.csv     revenue, setup, cost and size benchmarks, each with its source
-pune_rent_index.csv    published high-street rents, by tier, and the wards they run through
+wards/*.geojson          140 electoral wards: PMC 76 and PCMC 64 (DataMeet, 2012)
+wards/*.csv              PMC ward titles and admin zones
+ward_population.csv      residents per ward, built by tools/geo/build_population.py
+osm_raw.json             food and drink places from OpenStreetMap
+osm_context.json         colleges, offices, stations and place names (OpenStreetMap)
+rent_high_streets.csv    published prime rents for ten Pune high streets
+rent_listings.csv        a sample of Pune shop listings, for typical rent
+rent_benchmarks.csv      outlet size and healthy rent share, with sources
 """
 
 import csv
@@ -17,8 +18,8 @@ from pathlib import Path
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
-# OSM amenity -> Localio format. OSM files bakeries as shops, so none arrive
-# as amenity=bakery; ice cream parlours sit with cafes.
+# OSM amenity -> Localio format. Ice cream parlours and bakeries sit with
+# cafes; restaurants count only towards all food and drink.
 FORMATS = {"cafe": "cafe", "ice_cream": "cafe", "bakery": "cafe", "fast_food": "fast_food", "restaurant": "restaurant"}
 
 
@@ -35,7 +36,6 @@ class Ward:
     admin_zone: str
     population: int
     population_method: str
-    hrsl_people: int
     geometry: object
 
 
@@ -58,7 +58,7 @@ def load_wards(seed: Path) -> list[Ward]:
                 raise SourceError(f"ward_population.csv has no row for {corporation} ward {number}")
             title, admin = info.get(number, ("", "")) if corporation == "PMC" else ("", f"Zone {zones[number]}")
             wards.append(Ward(f"{corporation}-{number:02d}", corporation, number, title, admin,
-                              people["population"], people["method"], people["hrsl_people"], unary_union(geoms)))
+                              people["population"], people["method"], unary_union(geoms)))
     return wards
 
 
@@ -74,7 +74,6 @@ def load_pois(seed: Path) -> tuple[list[dict], dict]:
             "name": tags.get("name", ""),
             "brand": tags.get("brand", ""),
             "cuisine": tags.get("cuisine", ""),
-            "opening_hours": tags.get("opening_hours", ""),
             "lon": element["lon"],
             "lat": element["lat"],
         })
@@ -85,10 +84,11 @@ def load_context(seed: Path) -> dict:
     return _json(seed / "osm_context.json")
 
 
-def require(path: Path) -> Path:
+def load_csv(path: Path) -> list[dict]:
     if not path.is_file():
         raise SourceError(f"{path} not found")
-    return path
+    with path.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
 
 def _pmc_info(path: Path) -> dict[int, tuple[str, str]]:
@@ -100,8 +100,8 @@ def _population(path: Path) -> dict:
     if not path.is_file():
         raise SourceError(f"{path} not found (build it with: docker compose run --rm population)")
     with path.open(encoding="utf-8") as f:
-        return {(r["corporation"], int(r["wardnum"])): {"population": int(r["population"]), "method": r["method"],
-                                                       "hrsl_people": int(r["hrsl_people"])} for r in csv.DictReader(f)}
+        return {(r["corporation"], int(r["wardnum"])): {"population": int(r["population"]), "method": r["method"]}
+                for r in csv.DictReader(f)}
 
 
 def _json(path: Path) -> dict:

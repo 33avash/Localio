@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from localio import CATEGORIES
+from localio.score import MIN_OUTLETS
 
 CENSUS_2011_PMC = 3_124_458
 EXPECTED_WARDS = {"PMC": 76, "PCMC": 64}
@@ -49,13 +50,6 @@ def check_wards(wards: pd.DataFrame) -> list[Check]:
     ]
 
 
-def hrsl_agreement(wards: pd.DataFrame) -> str:
-    """Reported, not asserted: how well HRSL agrees with the PMC voter rolls."""
-    pmc = wards[(wards["corporation"] == "PMC") & wards["population_method"].str.startswith("2012 voters")]
-    r = np.corrcoef(pmc["population"], pmc["hrsl_people"])[0, 1]
-    return f"r = {r:.2f} between voter-based and HRSL ward populations (PMC); HRSL isn't used"
-
-
 def check_pois(pois: pd.DataFrame, wards: pd.DataFrame, placement: dict) -> list[Check]:
     people = wards["population"].sum()
     per_10k = len(pois) / people * 10_000
@@ -71,34 +65,21 @@ def check_pois(pois: pd.DataFrame, wards: pd.DataFrame, placement: dict) -> list
 
 def check_scores(scored: pd.DataFrame) -> list[Check]:
     values = scored[[f"{c}_score" for c in CATEGORIES]].to_numpy(dtype=float)
-    valid = int((np.isfinite(values) & (np.abs(values) <= 100)).sum())
+    valid = int((np.isfinite(values) & (values >= 0) & (values <= 100)).sum())
     low = int(scored["low_confidence"].sum())
     return [
-        Check("scores", valid == values.size, f"{valid} of {values.size} finite and within ±100"),
-        Check("low conf.", True, f"{low} of {len(scored)} wards have under 4 outlets"),
+        Check("scores", valid == values.size, f"{valid} of {values.size} finite and within 0-100"),
+        Check("low conf.", True, f"{low} of {len(scored)} wards have under {MIN_OUTLETS} outlets"),
     ]
 
 
-def check_economics(tiers: pd.DataFrame, projections: dict, cap: float, unmatched: list[str]) -> list[Check]:
-    """Every ward has a rent tier; every projected figure is finite; no
-    payback is negative or past the cap."""
-    missing = int(tiers["rent_tier"].isna().sum())
-    estimated = int(tiers["rent_estimated"].sum())
-    figures = [v for ward in projections.values() for p in ward.values()
-               for v in (*p["revenue"], *p["profit"], p["rent"])]
-    paybacks = [m for ward in projections.values() for p in ward.values() for m in (p["payback"] or [])]
-    shown = sum(1 for ward in projections.values() for p in ward.values() if p["payback"])
-    total = sum(len(ward) for ward in projections.values())
-    bad = [m for m in paybacks if not 0 < m <= cap]
-    return [
-        Check("rent tiers", missing == 0,
-              f"{len(tiers) - missing} of {len(tiers)} wards; {len(tiers) - estimated} on a published street, "
-              f"{estimated} estimated" + (f" ({len(unmatched)} street refs outside every ward: {', '.join(unmatched)})"
-                                          if unmatched else "")),
-        Check("money", all(np.isfinite(figures)), f"{len(figures)} revenue, rent and profit figures, all finite"),
-        Check("payback", not bad, f"{shown} of {total} ward-format projections pay back within {cap:.0f} months; "
-                                  f"none negative" if not bad else f"{len(bad)} outside (0, {cap:.0f}] months"),
-    ]
+def check_rent(tiers: pd.DataFrame, unmatched: list[str]) -> list[Check]:
+    """Every ward has a rent tier and a positive multiplier."""
+    ok = tiers["rent_tier"].notna().all() and (tiers["rent_multiplier"] > 0).all()
+    published = int((~tiers["rent_estimated"]).sum())
+    outside = f"; outside every ward: {', '.join(unmatched)}" if unmatched else ""
+    return [Check("rent", bool(ok), f"every ward has a tier; {published} on a published street, "
+                                    f"{len(tiers) - published} estimated from their zone{outside}")]
 
 
 def check_sentences(sentences: pd.Series) -> list[Check]:

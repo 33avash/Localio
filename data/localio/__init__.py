@@ -1,3 +1,3 @@
-"""Localio data pipeline: seed table in, scored locality GeoJSON out."""
+"""Localio data pipeline: seed data in, scored wards out."""
 
 CATEGORIES = ("cafe", "fast_food")
