@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Localio · Where to open in Pune</title>
-  <meta name="description" content="Find the Pune wards that are busy but short of cafes or QSRs, and what rent to expect there.">
+  <title>Localio · Where to open a cafe or QSR in Pune</title>
+  <meta name="description" content="Find the Pune wards that are busy but short of cafes or QSRs, what rent to expect there, and ask questions about any ward.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/localio.css">
@@ -19,10 +19,13 @@
         <button class="text-button" data-action="method">How it works</button>
       </div>
       <p class="tagline">Where to open a cafe or QSR in Pune</p>
-      <nav class="rail" id="panel-rail" aria-label="Steps"></nav>
+      <div class="tabs" role="tablist" aria-label="Views">
+        <button class="tab" role="tab" id="tab-plan" aria-controls="panel-body" data-action="tab" data-value="plan">Plan</button>
+        <button class="tab" role="tab" id="tab-ask" aria-controls="panel-body" data-action="tab" data-value="ask">Ask</button>
+      </div>
     </header>
-    <div class="panel-body" id="panel-body">
-      <div class="skeleton" aria-busy="true" aria-label="Loading Pune's cafes and QSRs">
+    <div class="panel-body" id="panel-body" role="tabpanel">
+      <div class="skeleton" aria-busy="true" aria-label="Loading Pune's wards">
         <span class="sk sk-title"></span>
         <span class="sk sk-line"></span>
         <span class="sk sk-line sk-short"></span>
@@ -33,7 +36,7 @@
     <footer class="panel-foot" id="panel-foot" hidden></footer>
     <section class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden></section>
   </aside>
-  <main id="map" aria-label="Map of Pune"></main>
+  <main id="map" aria-label="Map of Pune's wards"></main>
 
   <script>
     // Browsers block module scripts and fetch() on file://, so app.js would

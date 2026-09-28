@@ -1,5 +1,5 @@
-import { CATEGORIES, escapeHtml, num, plural, rupees } from "./format.js";
-import { competitionLevel, LENSES, monthlyRent, score } from "./score.js";
+import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
+import { breakdown, competitionLevel, LENSES, monthlyRent } from "./score.js";
 
 // Menu types in the order the stacked bar draws them, each with a muted
 // colour that stays clear of the teal accent and the density ramp.
@@ -18,87 +18,93 @@ const MENU = [
   ["Restaurant, no cuisine tagged", "#4E545C"],
 ];
 
-// One ward, in reading order: what it would cost, why it ranks where it
-// does, what's already on the menu, the recommendation, then the sources.
-export function drawerHtml(ward, { category, lens, sqft, meta, rent, rank }) {
+// One ward: its score and rent up top, each explained right under it,
+// then what's there already, the recommendation and the sources.
+export function drawerHtml(ward, { plan, meta, rent, position }) {
   const p = ward.properties;
-  const flag = p.status === "scored" ? "" : ` <span class="chip-flag">Only ${plural(p.total_pois, "outlet", "outlets")}: low confidence</span>`;
-  return `
-    <header class="drawer-head">
-      <button class="drawer-close" data-action="close-drawer" aria-label="Close ${escapeHtml(p.name)} details">×</button>
-      <h2 id="drawer-title" tabindex="-1">${escapeHtml(p.name)}</h2>
-      <p class="drawer-type">${p.corporation} ward ${num(p.ward_number)}${flag}</p>
-      ${p.aliases.length ? `<p class="drawer-aliases">Includes ${escapeHtml(list(p.aliases.slice(0, 4)))}</p>` : ""}
-    </header>
-    ${rentSection(p, rent, sqft)}
-    ${whySection(p, category, lens, meta, rank)}
-    <section class="drawer-section">
-      <h3>On the menu already</h3>
-      ${menuBar(p.menu)}
-    </section>
-    <p class="verdict">${escapeHtml(p.recommendation)}</p>
-    ${footer(p, meta, rent)}`;
-}
-
-// Rent for the shop size on the shortlist, and the sales that keep it
-// within the healthy share restaurant guides give.
-function rentSection(p, rent, sqft) {
-  const monthly = monthlyRent(rent, p, sqft);
+  const c = CATEGORIES[plan.category];
+  const part = breakdown(p, plan.category, plan.lens);
+  const monthly = monthlyRent(rent, p, plan.sqft);
   const [low, high] = rent.healthy_share;
+  const flag = p.status === "scored" ? ""
+    : `<p class="flag">Only ${num(p.total_pois)} outlets are mapped here, so its numbers are a lead to check on the ground.</p>`;
+  const standing = position ? `#${position} on your shortlist` : "Not in your top 5";
+  const budget = plan.budget
+    ? `<p class="${monthly <= plan.budget ? "ok" : "over"}">${monthly <= plan.budget ? "Within" : `${rupees(monthly - plan.budget)} over`}
+        your ${rupees(plan.budget)} budget.</p>` : "";
   const tier = p.rent.estimated
     ? `${p.rent.tier} tier, estimated from nearby wards`
     : `${p.rent.tier} tier: on ${escapeHtml(list(p.rent.streets))}`;
   return `
+    <header class="drawer-head">
+      <button class="drawer-close" data-action="close-drawer" aria-label="Close ${escapeHtml(p.name)} details">×</button>
+      <h2 id="drawer-title" tabindex="-1">${escapeHtml(p.name)}</h2>
+      <p class="drawer-type">${p.corporation} ward ${num(p.ward_number)}${p.aliases.length
+        ? ` · includes ${escapeHtml(list(p.aliases.slice(0, 3)))}` : ""}</p>
+      ${flag}
+    </header>
+
+    <div class="stats">
+      <section class="stat">
+        <h3>Score for a ${c.one}</h3>
+        <p class="stat-value"><span class="num">${Math.round(part.total)}</span><span class="stat-unit">/100</span></p>
+        <span class="split" aria-hidden="true"><span class="split-busy" style="width:${part.busy.toFixed(1)}%"></span><span
+          class="split-room" style="width:${part.room.toFixed(1)}%"></span></span>
+        <p class="stat-note"><span class="key key-busy"></span>${num(Math.round(part.busy))} busyness
+          <span class="key key-room"></span>${num(Math.round(part.room))} low competition</p>
+        <p class="stat-note">${LENSES[plan.lens].name} · ${standing}</p>
+      </section>
+      <section class="stat">
+        <h3>Rent for ${num(plan.sqft)} sq ft</h3>
+        <p class="stat-value"><span class="num">${rupees(monthly)}</span><span class="stat-unit">/month</span></p>
+        <p class="stat-note">${tier}</p>
+        ${budget}
+      </section>
+    </div>
+    <p class="body-text">To keep rent to ${Math.round(low * 100)}–${Math.round(high * 100)}% of sales, you'd need
+      ${num(rupees(monthly / high))}–${num(rupees(monthly / low))} a month in sales.</p>
+
+    ${why(p, plan, meta)}
+
     <section class="drawer-section">
-      <h3>Rent for a ${num(sqft)} sq ft shop</h3>
-      <p class="hero"><span class="num">${rupees(monthly)}</span><span class="hero-unit">a month</span></p>
-      <p class="hero-note">${tier}</p>
-      <p class="body-text">To keep rent to a healthy ${Math.round(low * 100)}–${Math.round(high * 100)}% of sales, you'd
-        need ${num(rupees(monthly / high))}–${num(rupees(monthly / low))} a month in sales.</p>
-    </section>`;
+      <h3>On the menu already</h3>
+      ${menuBar(p.menu)}
+    </section>
+
+    <p class="verdict">${escapeHtml(p.recommendation)}</p>
+    <button class="secondary" data-action="ask-ward" data-value="${escapeHtml(p.name)}">Ask about ${escapeHtml(p.name)}</button>
+
+    <footer class="drawer-foot">
+      <p>Outlets: ${escapeHtml(meta.vintage.outlets)}. Residents: ${escapeHtml(p.population_method)}.
+        Wards: ${escapeHtml(meta.vintage.wards)}.</p>
+      <p>Rent: median of ${num(rent.listings)} Pune shop listings (₹${rent.typical_psf}/sq ft) × the tier from
+        Cushman &amp; Wakefield's high-street rents. A guide, not a quote.</p>
+    </footer>`;
 }
 
-function whySection(p, category, lens, meta, rank) {
-  const formats = category ? [category] : Object.keys(CATEGORIES);
-  const competition = formats.map((c) => {
-    const stats = p.categories[c];
-    const level = competitionLevel(p, c, meta.city.per_10k[c]);
-    return figure(`${CATEGORIES[c].label}s per 10,000 residents`, stats.per_10k.toFixed(2),
-      `${stats.count} here · city median ${meta.city.per_10k[c].toFixed(2)} · ${level === "none" ? "no" : level} competition`);
-  });
-  const draws = p.draws;
-  const standing = category && lens
-    ? `<p class="note">Score ${num(score(p, category, LENSES[lens].weights).toFixed(0))} out of 100 for
-        ${LENSES[lens].name.toLowerCase()}${rank ? `: ${num(`#${rank.position}`)} of ${num(rank.of)} wards` : ""}.</p>`
-    : "";
+// The numbers behind the two parts of the score.
+function why(p, plan, meta) {
+  const c = CATEGORIES[plan.category];
+  const stats = p.categories[plan.category];
+  const d = p.draws;
   return `
     <section class="drawer-section">
-      <h3>Why it ranks here</h3>
+      <h3>Where the score comes from</h3>
       <dl class="figures">
-        ${figure("Busyness", `${Math.round(p.demand * 100)}/100`, "how it ranks on the three below, against other wards")}
+        ${figure("Busyness", `${Math.round(p.demand * 100)}/100`, "its rank on the three figures below")}
+        ${figure(`${c.label}s per 10k residents`, stats.per_10k.toFixed(2),
+          `${stats.count} here · city median ${meta.city.per_10k[plan.category].toFixed(2)} · `
+          + `${competitionLevel(p, plan.category, meta.city.per_10k[plan.category])} competition`)}
         ${figure("Residents per km²", p.residents_per_km2.toLocaleString("en-US"), `${p.population.toLocaleString("en-US")} residents`)}
         ${figure("Food and drink per km²", p.outlets_per_km2.toFixed(1), `${p.total_pois} outlets of every kind`)}
-        ${figure("Offices, colleges and stations", draws.offices + draws.colleges + draws.stations,
-          `${draws.offices} offices, ${draws.colleges} colleges, ${draws.stations} stations`)}
-        ${competition.join("")}
+        ${figure("Offices, colleges, stations", d.offices + d.colleges + d.stations,
+          `${d.offices} offices, ${d.colleges} colleges, ${d.stations} stations`)}
       </dl>
-      ${standing}
     </section>`;
 }
 
 function figure(label, value, detail) {
   return `<div><dt>${label}</dt><dd><span class="num">${value}</span><span class="range">${detail}</span></dd></div>`;
-}
-
-// Where the numbers come from, small and quiet: caveats, not the story.
-function footer(p, meta, rent) {
-  return `
-    <footer class="drawer-foot">
-      <p>Outlets: ${escapeHtml(meta.vintage.outlets)}. Residents: ${escapeHtml(p.population_method)}.
-        Wards: ${escapeHtml(meta.vintage.wards)}.</p>
-      <p>Rent: median of ${num(rent.listings)} Pune shop listings (₹${rent.typical_psf}/sq ft), times the tier from
-        Cushman &amp; Wakefield's high-street rents. A guide, not a quote.</p>
-    </footer>`;
 }
 
 function list(items) {
@@ -107,7 +113,7 @@ function list(items) {
 
 function menuBar(menu) {
   const parts = MENU.filter(([kind]) => menu[kind]).map(([kind, color]) => ({ kind, color, share: menu[kind] }));
-  if (!parts.length) return '<p class="body-text">No outlets recorded here.</p>';
+  if (!parts.length) return '<p class="body-text">No outlets are mapped here yet.</p>';
   const segments = parts.map((part) =>
     `<span style="width:${part.share * 100}%; background:${part.color}" title="${part.kind} ${Math.round(part.share * 100)}%"></span>`);
   const keys = parts.map((part) =>
