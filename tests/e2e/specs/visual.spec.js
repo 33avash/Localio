@@ -6,8 +6,8 @@ import { expect, test } from "@playwright/test";
 import { blockTiles, open } from "./helpers.js";
 
 const WIDTHS = { desktop: [1440, 900], laptop: [1024, 768], phone: [390, 844] };
-const STEPS = { format: "#format/cafe", priority: "#priority/cafe/footfall", shortlist: "#shortlist/cafe/footfall",
-  ask: "#ask/cafe/footfall", assumptions: "#assumptions/cafe/footfall" };
+const STEPS = { format: "#format/cafe", priority: "#priority/cafe/balanced", shortlist: "#shortlist/cafe/balanced",
+  ask: "#ask/cafe/balanced" };
 
 for (const [device, [width, height]] of Object.entries(WIDTHS)) {
   for (const [step, hash] of Object.entries(STEPS)) {

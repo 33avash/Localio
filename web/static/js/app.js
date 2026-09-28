@@ -1,10 +1,9 @@
 import { drawerHtml } from "./drawer.js";
-import { defaults } from "./economics.js";
 import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
 import { methodHtml } from "./method.js";
 import { animateScores } from "./motion.js";
-import { ASSUMPTIONS, assumptionResults, MAX_OPTIONS, renderLoadError, renderPanel, STEPS } from "./panel.js";
+import { renderLoadError, renderPanel, rentCells, STEPS } from "./panel.js";
 import { LENSES, rank } from "./score.js";
 import { enableSheet } from "./sheet.js";
 
@@ -30,23 +29,18 @@ async function getJson(url) {
 const config = await getJson("config.json").catch(() => ({}));
 const map = createMap(document.getElementById("map"), {
   cartoKey: config.cartoKey,
-  onSelect: (name) => openLocality(name),
+  onSelect: (name) => openWard(name),
 });
 
 // A failed load says so in the panel, where people are looking, rather
-// than leaving a blank map and an error in the console. The model report
-// only feeds "How it works", so the app runs without it; every money
-// figure needs economics.json.
+// than leaving a blank map and an error in the console.
 async function loadData() {
   try {
-    const [pois, localities, econ, report] = await Promise.all([
-      getJson("data/pois.geojson"),
-      getJson("data/localities.geojson"),
-      getJson("data/economics.json"),
-      getJson("data/model_report.json").catch(() => null),
-    ]);
-    if (!pois.features?.length || !localities.features?.length) throw new Error("The GeoJSON files are empty.");
-    return { pois: pois.features, localities: localities.features, meta: localities.meta, econ, report };
+    const [pois, wards, rent] = await Promise.all(
+      ["data/pois.geojson", "data/wards.geojson", "data/rent.json"].map(getJson),
+    );
+    if (!pois.features?.length || !wards.features?.length) throw new Error("The GeoJSON files are empty.");
+    return { pois: pois.features, wards: wards.features, meta: wards.meta, rent };
   } catch (error) {
     renderLoadError(regions.body, error.message);
     return null;
@@ -55,22 +49,11 @@ async function loadData() {
 
 const data = await loadData();
 
-// Assumptions carried in the URL hash, as ?param=value.
-const HASH_KEYS = { size: "size", sqft: "sqft", rent: "rent_psf", setup: "setup", margin: "target_margin" };
-
 const state = {
-  ...(data ? readHash() : { step: 1, category: null, lens: null, assumptions: {} }),
-  filters: { maxCompetitors: null, includeLow: false },
+  ...(data ? readHash() : { step: 1, category: null, lens: null, sqft: 300 }),
+  includeLow: false,
   conversation: { messages: [], pending: false, draft: "" },
 };
-
-// Assumptions are kept per format (a cafe's sq ft isn't a QSR's) and start
-// from the sourced defaults in economics.json.
-function inputs() {
-  if (!state.category) return null;
-  state.assumptions[state.category] ??= defaults(data.econ, state.category);
-  return state.assumptions[state.category];
-}
 let shown = { ranking: [], lens: null, scores: new Map(), widths: new Map() };
 let returnFocus = null;
 // Matches the sheet's height transition in localio.css.
@@ -81,31 +64,20 @@ const actions = {
   lens: (value) => { state.lens = value; },
   next: () => { state.step += 1; },
   goto: (value) => { state.step = Number(value); },
-  relax: (value) => {
-    if (value === "low") state.filters.includeLow = true;
-    else state.filters.maxCompetitors = value === "" ? null : Number(value);
-  },
   restart: () => {
-    Object.assign(state, { step: 1, category: null, lens: null, filters: { maxCompetitors: null, includeLow: false } });
+    Object.assign(state, { step: 1, category: null, lens: null });
     closeDrawer();
     map.resetView();
   },
-  // A new format size brings its own sourced size and setup cost; the rent
-  // and margin someone typed carry over.
-  size: (value) => {
-    const { rent_psf, target_margin } = inputs();
-    state.assumptions[state.category] = { ...defaults(data.econ, state.category, value), rent_psf, target_margin };
-  },
-  "reset-assumptions": () => { state.assumptions[state.category] = defaults(data.econ, state.category); },
 };
 
-// Controls that open or close the drawer don't change the flow, so they
-// skip the re-render (which would rebuild the list under the user).
+// Controls that open the drawer or send a question don't change the flow,
+// so they skip the re-render (which would rebuild the list under the user).
 const drawerActions = {
-  pick: (value) => openLocality(shown.ranking[Number(value)].feature.properties.name, { fly: true }),
-  "open-locality": (value) => openLocality(value, { fly: true }),
+  pick: (value) => openWard(shown.ranking[Number(value)].feature.properties.name, { fly: true }),
+  "open-ward": (value) => openWard(value, { fly: true }),
   "close-drawer": () => closeDrawer(),
-  method: () => openDrawer(methodHtml(data?.report, data?.econ)),
+  method: () => openDrawer(methodHtml(data)),
   ask: (value) => send(value),
 };
 
@@ -118,7 +90,6 @@ panel.addEventListener("click", (event) => {
     return;
   }
   const previousStep = state.step;
-  if (control.hasAttribute("data-close-drawer")) closeDrawer();
   actions[action](value);
   render();
   restoreFocus(control, state.step !== previousStep);
@@ -138,90 +109,55 @@ panel.addEventListener("keydown", (event) => {
   event.target.form.requestSubmit();
 });
 
+// Typing an outlet size updates every rent figure at once. Only the rent
+// cells change, so the field keeps its focus and caret; a size that isn't
+// a sensible number is marked and ignored until it is.
 panel.addEventListener("input", (event) => {
   if (event.target.id === "ask-input") state.conversation.draft = event.target.value;
-  if (event.target.dataset.assume) assume(event.target);
-});
-
-// Typing in an assumption recomputes the figures under it straight away.
-// Only the results re-render, so the field keeps focus and caret. A value
-// that isn't a usable number is marked and ignored until it is.
-const ASSUME = {
-  sqft: (v) => ({ sqft: v }),
-  rent_psf: (v) => ({ rent_psf: v }),
-  setup_lakh: (v) => ({ setup: Math.round(v * 1e5) }),
-  margin_pct: (v) => ({ target_margin: v / 100 }),
-};
-
-function assume(field) {
-  const value = Number(field.value);
-  const ok = field.value.trim() !== "" && Number.isFinite(value) && value >= Number(field.min)
-    && value <= Number(field.max);
-  field.setAttribute("aria-invalid", String(!ok));
+  if (event.target.id !== "sqft") return;
+  const value = Number(event.target.value);
+  const ok = Number.isFinite(value) && value >= 50 && value <= 5000;
+  event.target.setAttribute("aria-invalid", String(!ok));
   if (!ok) return;
-  Object.assign(inputs(), ASSUME[field.dataset.assume](value));
-  document.getElementById("assume-results").innerHTML = assumptionResults(viewState(), viewData());
+  state.sqft = value;
+  rentCells(regions.body, state, data);
   writeHash();
-}
+});
 
 panel.addEventListener("change", (event) => {
-  const filter = event.target.closest("[data-filter]");
-  if (!filter) return;
-  if (filter.dataset.filter === "max") state.filters.maxCompetitors = filter.value === "" ? null : Number(filter.value);
-  else state.filters.includeLow = filter.checked;
+  if (event.target.id !== "include-low") return;
+  state.includeLow = event.target.checked;
   render();
-  panel.querySelector(`[data-filter="${filter.dataset.filter}"]`)?.focus();
+  document.getElementById("include-low")?.focus();
 });
-
-// The folded filters stay as the user left them across re-renders.
-panel.addEventListener("toggle", (event) => {
-  if (event.target.matches("details.filters")) state.filters.open = event.target.open;
-}, true);
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !drawer.hidden) closeDrawer();
 });
 
-// What the panel views read: the state with the current assumptions, and
-// the data with the ranking. Assumptions reuses the shortlist's lens, or
-// proven footfall if none is picked yet.
-function viewState() {
-  return { ...state, inputs: inputs() };
-}
-
-function viewData() {
-  const ranked = state.category && state.step >= 3 && (state.lens || state.step === ASSUMPTIONS);
-  const ranking = ranked ? shortlist(state.filters, state.lens ?? "footfall") : [];
-  return {
-    meta: data.meta,
-    econ: data.econ,
-    localities: data.localities,
-    ranking,
-    empty: state.step === 3 && !ranking.length ? emptyExplanation() : null,
-    conversation: state.conversation,
-  };
+function ranking() {
+  if (state.step < 3 || !state.category || !state.lens) return [];
+  return rank(data.wards, state.category, state.lens, { includeLow: state.includeLow });
 }
 
 function render() {
-  const view = viewData();
-  const { ranking } = view;
-  renderPanel(regions, viewState(), view);
+  const ranked = ranking();
+  renderPanel(regions, state, { ...data, ranking: ranked });
   map.render({
     step: state.step,
     category: state.category,
-    lens: state.lens,
     meta: data.meta,
     pois: data.pois,
-    localities: data.localities,
-    picks: ranking.slice(0, 5).map(({ feature }) => feature),
+    wards: data.wards,
+    picks: ranked.slice(0, 5).map(({ feature }) => feature),
   });
   writeHash();
-  wireRows(ranking);
+  wireRows(ranked);
 }
 
-// Hovering or focusing a row finds its marker; when the lens changed,
+// Hovering or focusing a row finds its marker; when the priority changed,
 // scores count from their old values so the re-ranking is visible.
-function wireRows(ranking) {
+function wireRows(ranked) {
   const rows = [...regions.body.querySelectorAll("[data-action=pick]")];
   const animated = [];
   for (const row of rows) {
@@ -242,7 +178,7 @@ function wireRows(ranking) {
   }
   if (animated.length) animateScores(animated);
   shown = {
-    ranking,
+    ranking: ranked,
     lens: state.step === 3 ? state.lens : null,
     scores: new Map(rows.map((row) => [row.dataset.name, Number(row.querySelector(".pick-score").dataset.score)])),
     widths: new Map(rows.map((row) => [row.dataset.name, parseFloat(row.querySelector(".pick-bar").style.width)])),
@@ -287,50 +223,20 @@ function renderChat() {
   regions.body.scrollTop = regions.body.scrollHeight;
 }
 
-function shortlist({ maxCompetitors, includeLow }, lens = state.lens) {
-  const all = rank(data.localities, state.category, lens, { includeLow });
-  if (maxCompetitors === null) return all;
-  return all.filter(({ feature }) => feature.properties.categories[state.category].count <= maxCompetitors);
-}
-
-// Name the filter that emptied the list, and offer the smallest change
-// that brings localities back.
-function emptyExplanation() {
-  const { maxCompetitors, includeLow } = state.filters;
-  const { many } = CATEGORIES[state.category];
-  if (maxCompetitors === null) return { message: "No locality matches.", relax: null };
-  const scope = includeLow ? "locality" : "confident locality";
-  const looser = MAX_OPTIONS.filter((value) => value === null || value > maxCompetitors)
-    .find((value) => shortlist({ maxCompetitors: value, includeLow }).length > 0);
-  const message = `No ${scope} has ${maxCompetitors === 0 ? "zero" : `${maxCompetitors} or fewer`} ${many} already
-    open, so the "at most ${maxCompetitors}" filter rules them all out.`;
-  if (looser !== undefined) {
-    return { message, relax: { value: looser ?? "", label: looser === null ? `Allow any number of ${many}` : `Allow up to ${looser}` } };
-  }
-  return { message, relax: includeLow ? null : { value: "low", label: "Include low-confidence areas" } };
-}
-
-function openLocality(name, { fly = false } = {}) {
-  const feature = data.localities.find((f) => f.properties.name === name);
+function openWard(name, { fly = false } = {}) {
+  const feature = data.wards.find((f) => f.properties.name === name);
   if (!feature) return;
-  const sheetMoved = openDrawer(drawerHtml(feature, {
-    category: state.category,
-    lens: state.lens,
-    meta: data.meta,
-    econ: data.econ,
-    inputs: inputs(),
-    rank: rankOf(feature),
-  }));
+  const sheetMoved = openDrawer(drawerHtml(feature, { ...state, meta: data.meta, rent: data.rent, rank: rankOf(feature) }));
   map.select(name);
   if (!fly) return;
   // On a phone the sheet just rose; fly once the map has its new size.
-  if (sheetMoved) setTimeout(() => map.focusLocality(name), SHEET_MS);
-  else map.focusLocality(name);
+  if (sheetMoved) setTimeout(() => map.focusWard(name), SHEET_MS);
+  else map.focusWard(name);
 }
 
 function rankOf(feature) {
   if (!state.category || !state.lens || feature.properties.status !== "scored") return null;
-  const confident = rank(data.localities, state.category, state.lens);
+  const confident = rank(data.wards, state.category, state.lens);
   return { position: confident.findIndex((r) => r.feature === feature) + 1, of: confident.length };
 }
 
@@ -363,46 +269,28 @@ function restoreFocus(control, stepChanged) {
   (regions.body.querySelector(selector) ?? panel.querySelector(selector))?.focus();
 }
 
-// The URL hash mirrors the flow and any changed assumption
-// (#shortlist/qsr/footfall?sqft=450&rent=160), so a shortlist can be
-// reloaded or shared exactly as it looked.
+// The URL hash mirrors the flow, e.g. #shortlist/qsr/busy?sqft=450, so a
+// shortlist can be reloaded or shared exactly as it looked.
 function readHash() {
   const [path, query = ""] = decodeURIComponent(location.hash.slice(1)).split("?");
   const [stepName, slug, lens] = path.split("/");
   const category = Object.keys(CATEGORIES).find((key) => CATEGORIES[key].slug === slug) ?? null;
   const knownLens = Object.hasOwn(LENSES, lens ?? "") ? lens : null;
   let step = Math.max(1, STEPS.findIndex((name) => name.toLowerCase() === stepName) + 1);
-  if (step !== ASSUMPTIONS && !category) step = 1;
-  else if (step >= 3 && step !== ASSUMPTIONS && !knownLens) step = 2;
-  return { step, category, lens: knownLens, assumptions: category ? { [category]: readAssumptions(category, query) } : {} };
+  if (!category) step = 1;
+  else if (step >= 3 && !knownLens) step = 2;
+  const sqft = Number(new URLSearchParams(query).get("sqft"));
+  return { step, category, lens: knownLens, sqft: sqft >= 50 && sqft <= 5000 ? sqft : data.rent.default_sqft };
 }
 
-function readAssumptions(category, query) {
-  const params = new URLSearchParams(query);
-  const sizes = data.econ.sizes[category];
-  const values = defaults(data.econ, category, sizes.includes(params.get("size")) ? params.get("size") : sizes[0]);
-  for (const [param, key] of Object.entries(HASH_KEYS)) {
-    const value = Number(params.get(param));
-    if (param !== "size" && params.has(param) && Number.isFinite(value) && value > 0) values[key] = value;
-  }
-  return values;
-}
-
-// Only what differs from the defaults goes in the hash.
 function writeHash() {
   const parts = [STEPS[state.step - 1].toLowerCase(), CATEGORIES[state.category]?.slug, state.lens];
-  let hash = state.category || state.step === ASSUMPTIONS ? `#${parts.filter(Boolean).join("/")}` : "";
-  if (state.category) {
-    const current = inputs();
-    const base = defaults(data.econ, state.category, current.size);
-    const changed = Object.entries(HASH_KEYS).filter(([param, key]) => (param === "size"
-      ? current.size !== data.econ.sizes[state.category][0] : current[key] !== base[key]));
-    if (changed.length) hash += `?${changed.map(([param, key]) => `${param}=${current[key]}`).join("&")}`;
-  }
+  const size = state.sqft !== data.rent.default_sqft ? `?sqft=${state.sqft}` : "";
+  const hash = state.category ? `#${parts.filter(Boolean).join("/")}${size}` : "";
   history.replaceState(null, "", hash || location.pathname);
 }
 
 if (data) {
-  map.fitData(data.localities);
+  map.fitData(data.wards);
   render();
 }

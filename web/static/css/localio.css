@@ -41,10 +41,8 @@
      the ground behind white numerals on the map markers. */
   --accent-text: #4FA38D;
   --accent-strong: #2F7A67;
-  /* Financial signals only, never anything else: a healthy figure and a
-     flagged one. Both clear 7:1 on the panel. */
-  --pos: #A9C76E;
-  --neg: #F08A7A;
+  /* Marks a field whose value can't be used; clears 7:1 on the panel. */
+  --error: #F08A7A;
   --map-bg: #F2F1EE;
   --panel-width: 372px;
   --sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -199,8 +197,7 @@ button.rail-step:hover { border-bottom-color: var(--line); }
 
 .rail-step.upcoming { color: var(--muted); }
 
-/* Assumptions isn't a step in the flow, so it sits apart at the end. */
-.rail-aside { margin-left: auto; }
+/* Assumptions isn't a step in the flow { margin-left: auto; }
 
 /* ---- Loading and error states ---- */
 
@@ -437,19 +434,12 @@ h2:focus { outline: none; }
 
 .pick-name { font-weight: 500; }
 
-.pick-money {
-  font-size: 14px;
-  text-align: right;
-  white-space: nowrap;
-}
-
 .pick-why {
   grid-column: 2 / -1;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
 }
-
 
 /* ---- Legend and popups: the panel's dark ground, no heavy frame ---- */
 
@@ -706,27 +696,6 @@ h2:focus { outline: none; }
   .hero { font-size: 32px; }
 }
 
-/* ---- Shortlist filters and the empty state ---- */
-
-.filters {
-  display: grid;
-  gap: 6px;
-  margin: 0 0 16px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.filters summary {
-  width: fit-content;
-  cursor: pointer;
-}
-
-.filters summary:hover { color: var(--text); }
-
-.filters[open] summary { margin-bottom: 6px; }
-
-.filters .filter + .filter { margin-top: 6px; }
-
 .filter {
   display: flex;
   flex-wrap: wrap;
@@ -734,28 +703,7 @@ h2:focus { outline: none; }
   align-items: center;
 }
 
-.filter select {
-  padding: 2px 4px;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  font: inherit;
-}
-
 .filter input { accent-color: var(--accent); }
-
-.empty {
-  padding: 16px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.empty p { margin: 0 0 12px; }
-
-.empty .secondary { width: auto; }
 
 /* ---- Detail drawer: slides over the panel, never the map ---- */
 
@@ -811,8 +759,6 @@ h2:focus { outline: none; }
   color: var(--muted);
   font-size: 13px;
 }
-
-.chip-type,
 .chip-flag {
   display: inline-block;
   margin-right: 6px;
@@ -865,12 +811,6 @@ h2:focus { outline: none; }
   opacity: 0.6;
 }
 
-.hero-range {
-  margin: 4px 0 16px !important;
-  font-size: 13px;
-  opacity: 0.6;
-}
-
 .figures {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -895,37 +835,7 @@ h2:focus { outline: none; }
   font-size: 12px;
 }
 
-.figures .caveat {
-  color: var(--neg);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.strong { font-weight: 500; }
-
-.pos { color: var(--pos); }
-
-.neg { color: var(--neg); }
-
-.assumed {
-  margin: 14px 0 0 !important;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.assumed .text-button { font-size: 12px; }
-
-.sub {
-  margin: 12px 0 6px !important;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.sub:first-of-type { margin-top: 0 !important; }
-
 .body-text { font-size: 14px; }
-
-.drawer-similar { padding: 20px 0 4px; }
 
 .drawer-foot {
   margin-top: 20px;
@@ -937,12 +847,6 @@ h2:focus { outline: none; }
 }
 
 .drawer-foot p { margin: 0 0 6px; }
-
-.versus {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
 
 .stack {
   display: flex;
@@ -976,14 +880,6 @@ h2:focus { outline: none; }
   border-radius: 1px;
 }
 
-.estimate { font-size: 18px; }
-
-.drivers,
-.drawer-score {
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1003,45 +899,9 @@ h2:focus { outline: none; }
 
 /* The recommendation is the drawer's conclusion: large, with room above. */
 .verdict {
-  margin: 28px 0 0;
-  font-size: 18px;
+  margin: 24px 0 0;
+  font-size: 16px;
   line-height: 1.5;
-}
-
-.formats,
-.method-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.formats th,
-.formats td,
-.method-table th,
-.method-table td {
-  padding: 4px 0 4px 12px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-weight: 400;
-  text-align: right;
-}
-
-.formats th[scope="row"],
-.method-table th[scope="row"] {
-  padding-left: 0;
-  text-align: left;
-}
-
-.formats thead td,
-.formats thead th,
-.method-table thead td,
-.method-table thead th { border-top: 0; }
-
-.formats .chosen,
-.method-table .chosen th,
-.method-table .chosen td {
-  color: var(--text);
-  font-weight: 500;
 }
 
 .plain {
@@ -1230,151 +1090,48 @@ h2:focus { outline: none; }
   font-size: 12px;
 }
 
-/* ---- The money: the shortlist's insight and the Assumptions tab ---- */
+/* ---- Shortlist controls: shop size and the low-confidence switch ---- */
 
-.insight {
-  margin: 0 0 18px;
-  padding: 12px 14px;
-  background: #20242A;
-  border-left: 2px solid var(--accent);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.insight p { margin: 0; }
-
-.insight-label {
-  margin-bottom: 4px !important;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.note.tight { margin: 0 0 12px; }
-
-.field {
+.controls {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   margin: 0 0 16px;
-}
-
-.field-label {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
-.field-input {
+.size-field {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.field input {
-  width: 128px;
-  padding: 8px 10px;
+.size-field input {
+  width: 88px;
+  padding: 6px 8px;
   background: #20242A;
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 2px;
-  font: 500 15px/1.2 var(--mono);
+  font: 500 14px/1.2 var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
-.field input:focus-visible {
+.size-field input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.field input[aria-invalid="true"] { border-color: var(--neg); }
+.size-field input[aria-invalid="true"] { border-color: var(--error); }
 
-.field-unit {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.field-source {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-  cursor: help;
-}
-
-.segmented {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.segmented button {
-  padding: 6px 12px;
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.segmented button:hover { border-color: var(--muted); }
-
-.segmented [aria-checked="true"] {
-  background: #20242A;
-  border-color: var(--accent);
-}
-
-.secondary.compact {
-  width: auto;
-  padding: 8px 14px;
-  font-size: 14px;
-}
-
-.assume-results {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-
-.assume-results h3 {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.assume-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--line);
-}
-
-.assume-list li {
-  display: grid;
-  grid-template-columns: 24px 1fr auto;
-  gap: 2px 8px;
-  align-items: baseline;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.assume-name { font-weight: 500; }
-
-.assume-profit {
+.pick-rent {
   font-size: 14px;
   text-align: right;
   white-space: nowrap;
 }
 
-.assume-detail {
-  grid-column: 2 / -1;
+.hero-note {
+  margin: 4px 0 12px !important;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
-
-.method-table.sources td:last-child {
-  text-align: left;
-  font-size: 12px;
-}
-
-.method-table a { color: var(--text); }
-
-.basis { color: var(--muted); }
-
-.formula li { margin-bottom: 2px; }

@@ -2,7 +2,7 @@ import { CATEGORIES, escapeHtml, num } from "./format.js";
 import { reducedMotion } from "./motion.js";
 import { outletPopup } from "./popups.js";
 
-// Only a starting point while data loads; fitData() then frames the catchments.
+// Only a starting point while data loads; fitData() then frames the wards.
 const PUNE = [18.5204, 73.8567];
 
 const OSM_ATTRIBUTION =
@@ -36,7 +36,7 @@ export function createMap(element, { cartoKey, onSelect }) {
     zoom: 12,
     maxZoom: 16,
     maxBoundsViscosity: 0.8,
-    // Quarter steps let fitData() frame the catchments closely on any
+    // Quarter steps let fitData() frame the wards closely on any
     // screen instead of dropping a whole zoom level to make them fit.
     zoomSnap: 0.25,
   });
@@ -135,38 +135,38 @@ export function createMap(element, { cartoKey, onSelect }) {
     }
   }
 
-  // One filled catchment per locality. The areas tile rather than overlap,
-  // so every colour on the map is a colour in the legend. Localities with
-  // too few outlets for a confident score get a hatch on top. Hovering
-  // shows the name and headline figure; clicking opens the detail drawer.
+  // One filled polygon per ward. Wards tile rather than overlap, so every
+  // colour on the map is a colour in the legend. Wards with too few
+  // outlets for a confident score get a hatch on top. Hovering shows the
+  // name and headline figure; clicking opens the detail drawer.
   function drawAreas(view) {
     const shortlisted = view.step >= 3;
-    for (const locality of view.localities) {
-      const { name } = locality.properties;
-      const dimmed = shortlisted && !view.picks.includes(locality);
-      const area = L.geoJSON(locality, {
+    for (const ward of view.wards) {
+      const { name } = ward.properties;
+      const dimmed = shortlisted && !view.picks.includes(ward);
+      const area = L.geoJSON(ward, {
         style: {
           color: "#FFFFFF",
           opacity: 0.25,
           weight: 0.5,
-          fillColor: DENSITY[densityClass(locality, view.category)],
+          fillColor: DENSITY[densityClass(ward, view.category)],
           fillOpacity: dimmed ? 0.2 : 0.7,
         },
       });
       area.eachLayer((layer) => {
         if (canHover) {
-          layer.bindTooltip(() => areaLabel(locality, view.category),
+          layer.bindTooltip(() => areaLabel(ward, view.category),
             { sticky: true, direction: "top", offset: [0, -12], className: "area-tip", opacity: 1 });
         }
         layer.on("mouseover", () => layer.setStyle(HIGHLIGHT).bringToFront());
         layer.on("mouseout", () => { if (name !== selected) area.resetStyle(layer); });
         layer.on("click", () => onSelect(name));
-        layer.on("add", () => layer.getElement()?.setAttribute("aria-label", `${name}: ${plainLabel(locality, view.category)}`));
+        layer.on("add", () => layer.getElement()?.setAttribute("aria-label", `${name}: ${plainLabel(ward, view.category)}`));
         areaLayers.set(name, { area, layer });
       });
       area.addTo(areas);
-      if (locality.properties.status !== "scored") {
-        L.geoJSON(locality, { interactive: false, style: { stroke: false, fillColor: "url(#hatch)", fillOpacity: 1 } })
+      if (ward.properties.status !== "scored") {
+        L.geoJSON(ward, { interactive: false, style: { stroke: false, fillColor: "url(#hatch)", fillOpacity: 1 } })
           .addTo(hatching);
       }
     }
@@ -185,23 +185,23 @@ export function createMap(element, { cartoKey, onSelect }) {
     if (name && areaLayers.has(name)) areaLayers.get(name).layer.setStyle(HIGHLIGHT).bringToFront();
   }
 
-  function focusLocality(name) {
-    const locality = lastView.localities.find((f) => f.properties.name === name);
-    if (!locality) return;
-    if (reducedMotion()) map.setView(labelPoint(locality), 14, { animate: false });
-    else map.flyTo(labelPoint(locality), 14, { duration: 1.2 });
+  function focusWard(name) {
+    const ward = lastView.wards.find((f) => f.properties.name === name);
+    if (!ward) return;
+    if (reducedMotion()) map.setView(labelPoint(ward), 14, { animate: false });
+    else map.flyTo(labelPoint(ward), 14, { duration: 1.2 });
   }
 
   // The top 5 are the one loud element on the map. Each sits on its
-  // catchment's label point, which is always inside the catchment.
+  // ward's label point, which is always inside the ward.
   function drawPicks(view) {
-    pickMarkers = view.picks.map((locality, i) => {
-      const marker = L.marker(labelPoint(locality), {
+    pickMarkers = view.picks.map((ward, i) => {
+      const marker = L.marker(labelPoint(ward), {
         icon: L.divIcon({ className: "pick-marker", html: `<span class="pick-dot">${num(i + 1)}</span>`, iconSize: [28, 28] }),
-        title: `${i + 1}. ${locality.properties.name}`,
+        title: `${i + 1}. ${ward.properties.name}`,
         zIndexOffset: 1000,
       })
-        .on("click", () => onSelect(locality.properties.name))
+        .on("click", () => onSelect(ward.properties.name))
         .addTo(picks);
       marker.anchor = marker.getLatLng();
       return marker;
@@ -253,12 +253,12 @@ export function createMap(element, { cartoKey, onSelect }) {
     marker.getElement()?.classList.toggle("is-highlighted", on);
   }
 
-  // Frame the catchments instead of a fixed centre, which showed mostly
+  // Frame the wards instead of a fixed centre, which showed mostly
   // empty terrain. Panning stops a little past the data, and zooming out
   // stops one level past the framed view.
-  function fitData(localities) {
+  function fitData(wards) {
     map.invalidateSize();
-    dataBounds = L.geoJSON({ type: "FeatureCollection", features: localities }).getBounds();
+    dataBounds = L.geoJSON({ type: "FeatureCollection", features: wards }).getBounds();
     map.fitBounds(dataBounds, { padding: [40, 40], maxZoom: 13, animate: false });
     map.setMaxBounds(dataBounds.pad(0.15));
     map.setMinZoom(map.getZoom() - 1);
@@ -268,24 +268,24 @@ export function createMap(element, { cartoKey, onSelect }) {
     map.fitBounds(dataBounds, { padding: [40, 40], maxZoom: 13 });
   }
 
-  return { render, fitData, focusLocality, highlightPick, resetView, select };
+  return { render, fitData, focusWard, highlightPick, resetView, select };
 }
 
 const HIGHLIGHT = { color: ACCENT, opacity: 1, weight: 2 };
 
-function areaLabel(locality, category) {
-  return `<strong>${escapeHtml(locality.properties.name)}</strong><br>${plainLabel(locality, category)}`;
+function areaLabel(ward, category) {
+  return `<strong>${escapeHtml(ward.properties.name)}</strong><br>${plainLabel(ward, category)}`;
 }
 
-function plainLabel(locality, category) {
-  const p = locality.properties;
+function plainLabel(ward, category) {
+  const p = ward.properties;
   const value = category ? p.categories[category].per_10k : p.total_per_10k;
   const what = category ? CATEGORIES[category].many : "food and drink outlets";
   return `${value.toFixed(2)} ${what} per 10,000 residents`;
 }
 
-function densityClass(locality, category) {
-  const { properties } = locality;
+function densityClass(ward, category) {
+  const { properties } = ward;
   return category ? properties.categories[category].density_class : properties.total_density_class;
 }
 
@@ -322,7 +322,7 @@ function legendHtml(view, outletsOn, open) {
     <p class="ramp-ends"><span>${ranges[0] ? "none" : num(ranges[present[0]][0])}</span><span>${num(ranges[top][1])}</span></p>
     <ul class="legend-keys">
       ${picks.length ? legendRow('<span class="swatch top-pick"></span>', "Your top 5") : ""}
-      ${legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_pois_to_score)} outlets: low confidence`)}
+      ${legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_outlets)} outlets: low confidence`)}
     </ul>
     <details ${open ? "open" : ""}>
       <summary>All breaks</summary>
@@ -381,8 +381,8 @@ function watchTiles(map, tiles, element) {
   });
 }
 
-function labelPoint(locality) {
-  const [lng, lat] = locality.properties.label_point;
+function labelPoint(ward) {
+  const [lng, lat] = ward.properties.label_point;
   return [lat, lng];
 }
 

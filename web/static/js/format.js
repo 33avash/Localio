@@ -14,44 +14,15 @@ export function num(value) {
   return `<span class="num">${value}</span>`;
 }
 
-export function counted(n, category) {
-  const { one, many } = CATEGORIES[category];
-  return `${num(n)} ${n === 1 ? one : many}`;
-}
-
-export function compact(n) {
-  if (n < 1000) return String(n);
-  return `${(n / 1000).toFixed(n < 100000 ? 1 : 0)}k`;
-}
-
-// Rupees the way Indian business writes them: ₹45k, ₹4.2L, ₹1.15Cr.
+// Rupees the way Indian business writes them: ₹45k, ₹4.2L.
 export function rupees(value) {
-  const sign = value < 0 ? "−" : "";
-  const abs = Math.abs(value);
-  if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(2)}Cr`;
-  if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(1)}L`;
-  if (abs >= 1e3) return `${sign}₹${Math.round(abs / 1e3)}k`;
-  return `${sign}₹${Math.round(abs)}`;
+  if (value >= 1e5) return `₹${(value / 1e5).toFixed(1)}L`;
+  if (value >= 1e3) return `₹${Math.round(value / 1e3)}k`;
+  return `₹${Math.round(value)}`;
 }
 
-// A p10–p90 range in mono; a negative end is marked as a loss.
-export function rupeeRange(low, high) {
-  const part = (v) => `<span class="${v < 0 ? "neg" : ""}">${rupees(v)}</span>`;
-  return `<span class="num">${part(low)}–${part(high)}</span>`;
-}
-
-export function percent(share, digits = 0) {
-  return `${(share * 100).toFixed(digits)}%`;
-}
-
-// Mid-sentence forms; capitalise() them to start a line.
-export const SIZE_LABELS = {
-  cafe: { small: "small cafe", mid: "mid-sized cafe" },
-  fast_food: { small: "small QSR", franchise: "QSR franchise" },
-};
-
-export function capitalise(text) {
-  return text[0].toUpperCase() + text.slice(1);
+export function plural(n, one, many) {
+  return `${num(n.toLocaleString("en-US"))} ${n === 1 ? one : many}`;
 }
 
 export function escapeHtml(text) {
