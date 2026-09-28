@@ -14,14 +14,24 @@
     <button class="sheet-handle" id="sheet-handle" aria-expanded="false" aria-controls="panel"
       aria-label="Expand panel"></button>
     <header class="panel-head">
-      <p class="brand">Localio</p>
+      <div class="brand-row">
+        <p class="brand">Localio</p>
+        <button class="text-button" data-action="method">How it works</button>
+      </div>
       <p class="tagline">Where to open a cafe or QSR in Pune</p>
       <nav class="rail" id="panel-rail" aria-label="Steps"></nav>
     </header>
     <div class="panel-body" id="panel-body">
-      <p class="status">Loading Pune's cafes and QSRs…</p>
+      <div class="skeleton" aria-busy="true" aria-label="Loading Pune's cafes and QSRs">
+        <span class="sk sk-title"></span>
+        <span class="sk sk-line"></span>
+        <span class="sk sk-line sk-short"></span>
+        <span class="sk sk-option"></span>
+        <span class="sk sk-option"></span>
+      </div>
     </div>
     <footer class="panel-foot" id="panel-foot" hidden></footer>
+    <section class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden></section>
   </aside>
   <main id="map" aria-label="Map of Pune"></main>
 

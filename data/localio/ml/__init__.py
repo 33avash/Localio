@@ -39,7 +39,8 @@ def run(pois: pd.DataFrame, localities: pd.DataFrame) -> Results:
             new = new_outlet_features(localities, pois, c, standard)
             predicted[c] = footfall.predict(model, new, evaluation.residuals)
             demand[c] = predicted[c]["log"]
-            drivers[c] = footfall.contributions(model, new).apply(footfall.drivers, axis=1)
+            drivers[c] = footfall.contributions(model, new).apply(
+                footfall.drivers, axis=1, coefficients=footfall.coefficients(model))
         effects = [{**e, "label": LABELS[e["feature"]]} for e in footfall.effects(model)]
     else:
         demand = {c: observed_demand(localities) for c in CATEGORIES}

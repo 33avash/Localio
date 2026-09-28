@@ -1,5 +1,6 @@
-import { CATEGORIES, num } from "./format.js";
-import { localityPopup, outletPopup } from "./popups.js";
+import { CATEGORIES, escapeHtml, num } from "./format.js";
+import { reducedMotion } from "./motion.js";
+import { outletPopup } from "./popups.js";
 
 // Only a starting point while data loads; fitData() then frames the catchments.
 const PUNE = [18.5204, 73.8567];
@@ -24,7 +25,8 @@ const POPUP = { className: "localio-popup", minWidth: 240, maxWidth: 290 };
 // Numbered markers closer than this on screen get pushed apart.
 const MIN_GAP_PX = 34;
 
-export function createMap(element, { cartoKey }) {
+// onSelect(name) runs when an area or a numbered marker is clicked.
+export function createMap(element, { cartoKey, onSelect }) {
   const map = L.map(element, {
     center: PUNE,
     zoom: 12,
@@ -56,6 +58,8 @@ export function createMap(element, { cartoKey }) {
   const picks = L.layerGroup().addTo(map);
   const leaders = L.layerGroup().addTo(map);
   let pickMarkers = [];
+  let areaLayers = new Map();
+  let selected = null;
   let lastView = null;
   let outletsChoice = null;
   // On a phone the legend would cover a third of the map, so it starts
@@ -84,6 +88,7 @@ export function createMap(element, { cartoKey }) {
     picks.clearLayers();
     leaders.clearLayers();
     pickMarkers = [];
+    areaLayers = new Map();
     drawAreas(view);
     drawOutlets(view);
     if (view.step === 3) drawPicks(view);
@@ -121,10 +126,12 @@ export function createMap(element, { cartoKey }) {
 
   // One filled catchment per locality. The areas tile rather than overlap,
   // so every colour on the map is a colour in the legend. Localities with
-  // too few outlets for a confident score get a hatch on top.
+  // too few outlets for a confident score get a hatch on top. Hovering
+  // shows the name and headline figure; clicking opens the detail drawer.
   function drawAreas(view) {
     const shortlisted = view.step === 3;
     for (const locality of view.localities) {
+      const { name } = locality.properties;
       const dimmed = shortlisted && !view.picks.includes(locality);
       const area = L.geoJSON(locality, {
         style: {
@@ -136,9 +143,12 @@ export function createMap(element, { cartoKey }) {
         },
       });
       area.eachLayer((layer) => {
-        layer.bindPopup(() => localityPopup(locality.properties, view), POPUP);
-        layer.on("mouseover", () => layer.setStyle({ color: ACCENT, opacity: 1, weight: 2 }).bringToFront());
-        layer.on("mouseout", () => area.resetStyle(layer));
+        layer.bindTooltip(() => areaLabel(locality, view.category), { sticky: true, direction: "top", className: "area-tip", opacity: 1 });
+        layer.on("mouseover", () => layer.setStyle(HIGHLIGHT).bringToFront());
+        layer.on("mouseout", () => { if (name !== selected) area.resetStyle(layer); });
+        layer.on("click", () => onSelect(name));
+        layer.on("add", () => layer.getElement()?.setAttribute("aria-label", `${name}: ${plainLabel(locality, view.category)}`));
+        areaLayers.set(name, { area, layer });
       });
       area.addTo(areas);
       if (locality.properties.status !== "scored") {
@@ -147,6 +157,24 @@ export function createMap(element, { cartoKey }) {
       }
     }
     ensureHatchPattern(map);
+    if (selected) select(selected);
+  }
+
+  // Keep the open drawer's area outlined in the accent.
+  function select(name) {
+    if (selected && areaLayers.has(selected)) {
+      const { area, layer } = areaLayers.get(selected);
+      area.resetStyle(layer);
+    }
+    selected = name;
+    if (name && areaLayers.has(name)) areaLayers.get(name).layer.setStyle(HIGHLIGHT).bringToFront();
+  }
+
+  function focusLocality(name) {
+    const locality = lastView.localities.find((f) => f.properties.name === name);
+    if (!locality) return;
+    if (reducedMotion()) map.setView(labelPoint(locality), 14, { animate: false });
+    else map.flyTo(labelPoint(locality), 14, { duration: 1.2 });
   }
 
   // The top 5 are the one loud element on the map. Each sits on its
@@ -158,7 +186,7 @@ export function createMap(element, { cartoKey }) {
         title: `${i + 1}. ${locality.properties.name}`,
         zIndexOffset: 1000,
       })
-        .bindPopup(() => localityPopup(locality.properties, view), POPUP)
+        .on("click", () => onSelect(locality.properties.name))
         .addTo(picks);
       marker.anchor = marker.getLatLng();
       return marker;
@@ -209,12 +237,6 @@ export function createMap(element, { cartoKey }) {
     marker.getElement()?.classList.toggle("is-highlighted", on);
   }
 
-  function focusPick(index) {
-    const marker = pickMarkers[index];
-    map.once("moveend", () => marker.openPopup());
-    map.flyTo(marker.getLatLng(), 14, { duration: 1.2 });
-  }
-
   // Frame the catchments instead of a fixed centre, which showed mostly
   // empty terrain. Panning stops a little past the data, and zooming out
   // stops one level past the framed view.
@@ -230,7 +252,20 @@ export function createMap(element, { cartoKey }) {
     map.fitBounds(dataBounds, { padding: [40, 40], maxZoom: 13 });
   }
 
-  return { render, fitData, focusPick, highlightPick, resetView };
+  return { render, fitData, focusLocality, highlightPick, resetView, select };
+}
+
+const HIGHLIGHT = { color: ACCENT, opacity: 1, weight: 2 };
+
+function areaLabel(locality, category) {
+  return `<strong>${escapeHtml(locality.properties.name)}</strong><br>${plainLabel(locality, category)}`;
+}
+
+function plainLabel(locality, category) {
+  const p = locality.properties;
+  const value = category ? p.categories[category].per_10k : p.total_per_10k;
+  const what = category ? CATEGORIES[category].many : "cafes and QSRs";
+  return `${value.toFixed(2)} ${what} per 10,000 residents`;
 }
 
 function densityClass(locality, category) {
@@ -313,7 +348,10 @@ function watchTiles(map, tiles, element) {
     notice.onAdd = () => {
       const div = L.DomUtil.create("div", "basemap-notice");
       div.setAttribute("role", "status");
-      div.textContent = "Basemap unavailable. Markers and scores still work.";
+      div.innerHTML = `<span>Basemap unavailable. Areas, markers and scores still work.</span>
+        <button type="button" aria-label="Dismiss">×</button>`;
+      L.DomEvent.disableClickPropagation(div);
+      div.querySelector("button").addEventListener("click", () => notice.remove());
       return div;
     };
     notice.addTo(map);

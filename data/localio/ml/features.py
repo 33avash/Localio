@@ -40,6 +40,16 @@ LABELS = {
 }
 
 
+# How a place feature reads when it's above or below the average outlet's.
+PHRASES = {
+    "km_from_centre": ("being far from the city centre", "being close to the city centre"),
+    "log_residents_per_km2": ("a densely populated catchment", "a thinly populated catchment"),
+    "outlets_within_500m": ("many outlets within 500 m", "few outlets within 500 m"),
+    "outlets_within_1km": ("many cafes and QSRs within 1 km", "few cafes and QSRs within 1 km"),
+    "neighbour_log_reviews": ("well-reviewed neighbours", "little-reviewed neighbours"),
+}
+
+
 def target(pois: pd.DataFrame) -> np.ndarray:
     """log(1 + reviews): review counts span 2 to 60,000, so the log is what's comparable."""
     return np.log1p(pois["review_count"].to_numpy(dtype=float))

@@ -37,6 +37,10 @@
   --muted: #8C8A83;
   --line: #2E3238;
   --accent: #3D8F7B;
+  /* Same hue, adjusted for 4.5:1 contrast: text on the dark panel, and
+     the ground behind white numerals on the map markers. */
+  --accent-text: #4FA38D;
+  --accent-strong: #2F7A67;
   --map-bg: #F2F1EE;
   --panel-width: 372px;
   --sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -48,13 +52,18 @@
 html, body { margin: 0; height: 100%; }
 
 body {
+  font-variant-numeric: tabular-nums;
   background: var(--bg);
   color: var(--text);
   font: 400 15px/1.5 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
-.num { font-family: var(--mono); font-size: 0.92em; }
+.num {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---- Layout: fixed panel on the left, map fills the rest ---- */
 
@@ -94,8 +103,11 @@ body {
 #map.no-basemap { background: #E4E2DD; }
 
 .basemap-notice {
-  max-width: 220px;
-  padding: 6px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 240px;
+  padding: 6px 6px 6px 10px;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);
@@ -106,6 +118,22 @@ body {
   flex: none;
   padding: 20px 24px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.brand-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.basemap-notice button {
+  padding: 0 4px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .brand {
@@ -353,6 +381,7 @@ h2:focus { outline: none; }
 }
 
 .pick {
+  position: relative;
   display: grid;
   grid-template-columns: 28px 1fr auto;
   column-gap: 8px;
@@ -369,8 +398,33 @@ h2:focus { outline: none; }
 
 .pick:hover { background: #20242A; }
 
+/* A thin bar behind each row, scaled to the top score: a number with a
+   bar reads as a ranking. */
+.pick-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  background: var(--accent);
+  opacity: 0.12;
+  transition: width 0.18s ease-out;
+  pointer-events: none;
+}
+
+.pick > :not(.pick-bar) {
+  position: relative;
+  z-index: 1;
+}
+
+.low-flag {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .pick-rank {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 500;
 }
 
@@ -441,7 +495,7 @@ h2:focus { outline: none; }
 }
 
 .swatch.top-pick {
-  background: var(--accent);
+  background: var(--accent-strong);
   border: 1.5px solid #FFFFFF;
   border-radius: 50%;
 }
@@ -453,7 +507,7 @@ h2:focus { outline: none; }
   place-items: center;
   width: 100%;
   height: 100%;
-  background: var(--accent);
+  background: var(--accent-strong);
   color: #FFFFFF;
   border: 2px solid #FFFFFF;
   border-radius: 50%;
@@ -496,41 +550,6 @@ h2:focus { outline: none; }
 .localio-popup .popup-sub {
   margin-bottom: 8px;
   color: var(--muted);
-}
-
-.localio-popup table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.localio-popup th,
-.localio-popup td {
-  padding: 3px 0;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  padding-left: 14px;
-  font-weight: 400;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.localio-popup th[scope="row"] {
-  padding-left: 0;
-  text-align: left;
-}
-
-.localio-popup thead td,
-.localio-popup thead th { border-top: 0; }
-
-.localio-popup .chosen {
-  color: var(--text);
-  font-weight: 500;
-}
-
-.localio-popup .popup-score {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
 }
 
 /* ---- Phones: map on top, panel as a draggable bottom sheet ---- */
@@ -616,4 +635,298 @@ h2:focus { outline: none; }
     width: 10px;
     height: 10px;
   }
+}
+
+/* ---- Shortlist filters and the empty state ---- */
+
+.filters {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter select {
+  padding: 2px 4px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font: inherit;
+}
+
+.filter input { accent-color: var(--accent); }
+
+.empty {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.empty p { margin: 0 0 12px; }
+
+.empty .secondary { width: auto; }
+
+/* ---- Detail drawer: slides over the panel, never the map ---- */
+
+.drawer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow-y: auto;
+  padding: 20px 24px 32px;
+  background: var(--bg);
+  opacity: 0;
+  transform: translateX(-12px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.drawer.open {
+  opacity: 1;
+  transform: none;
+}
+
+.drawer[hidden] { display: none; }
+
+.drawer-head {
+  position: relative;
+  padding-right: 32px;
+  margin-bottom: 8px;
+}
+
+.drawer-close {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.drawer-close:hover { color: var(--text); }
+
+.drawer h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.drawer-type {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.drawer-flag {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.drawer-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.drawer-section p { margin: 0 0 8px; }
+
+.drawer-section p:last-child { margin-bottom: 0; }
+
+.drawer h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+}
+
+.figures dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.figures dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.versus {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stack {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.stack span { height: 100%; }
+
+.stack-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stack-keys li {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.key {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+}
+
+.estimate { font-size: 18px; }
+
+.drivers,
+.drawer-score {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  background: #20242A;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover { border-color: var(--muted); }
+
+/* The conclusion reads last and largest. */
+.verdict {
+  margin: 20px 0 0;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.formats,
+.method-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.formats th,
+.formats td,
+.method-table th,
+.method-table td {
+  padding: 4px 0 4px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 400;
+  text-align: right;
+}
+
+.formats th[scope="row"],
+.method-table th[scope="row"] {
+  padding-left: 0;
+  text-align: left;
+}
+
+.formats thead td,
+.formats thead th,
+.method-table thead td,
+.method-table thead th { border-top: 0; }
+
+.formats .chosen,
+.method-table .chosen th,
+.method-table .chosen td {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.plain {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---- Loading skeleton, shaped like the first step ---- */
+
+.skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.sk {
+  display: block;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #22262B 0%, #2A2F35 50%, #22262B 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.sk-title { height: 24px; width: 70%; }
+.sk-short { width: 45%; }
+.sk-option { height: 64px; }
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* ---- Hover label over an area ---- */
+
+.area-tip {
+  padding: 6px 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  font: 400 12px/1.4 var(--sans);
+}
+
+.area-tip::before { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .pick-bar { transition: none; }
+
+  .sk { animation: none; }
 }
