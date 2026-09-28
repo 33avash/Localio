@@ -79,6 +79,28 @@ def check_scores(scored: pd.DataFrame) -> list[Check]:
     ]
 
 
+def check_economics(tiers: pd.DataFrame, projections: dict, cap: float, unmatched: list[str]) -> list[Check]:
+    """Every ward has a rent tier; every projected figure is finite; no
+    payback is negative or past the cap."""
+    missing = int(tiers["rent_tier"].isna().sum())
+    estimated = int(tiers["rent_estimated"].sum())
+    figures = [v for ward in projections.values() for p in ward.values()
+               for v in (*p["revenue"], *p["profit"], p["rent"])]
+    paybacks = [m for ward in projections.values() for p in ward.values() for m in (p["payback"] or [])]
+    shown = sum(1 for ward in projections.values() for p in ward.values() if p["payback"])
+    total = sum(len(ward) for ward in projections.values())
+    bad = [m for m in paybacks if not 0 < m <= cap]
+    return [
+        Check("rent tiers", missing == 0,
+              f"{len(tiers) - missing} of {len(tiers)} wards; {len(tiers) - estimated} on a published street, "
+              f"{estimated} estimated" + (f" ({len(unmatched)} street refs outside every ward: {', '.join(unmatched)})"
+                                          if unmatched else "")),
+        Check("money", all(np.isfinite(figures)), f"{len(figures)} revenue, rent and profit figures, all finite"),
+        Check("payback", not bad, f"{shown} of {total} ward-format projections pay back within {cap:.0f} months; "
+                                  f"none negative" if not bad else f"{len(bad)} outside (0, {cap:.0f}] months"),
+    ]
+
+
 def check_sentences(sentences: pd.Series) -> list[Check]:
     """A "{" left in a sentence means a template slot was never filled."""
     bad = int((sentences.str.contains(r"[{}]") | (sentences.str.len() == 0)).sum())

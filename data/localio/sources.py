@@ -5,6 +5,8 @@ wards/*.csv            PMC ward titles, admin wards and 2012 voter counts
 ward_population.csv    residents per ward, built by tools/geo/build_population.py
 osm_raw.json           food and drink places from OpenStreetMap
 osm_context.json       colleges, offices, stations, places, roads (OpenStreetMap)
+unit_economics.csv     revenue, setup, cost and size benchmarks, each with its source
+pune_rent_index.csv    published high-street rents, by tier, and the wards they run through
 """
 
 import csv
@@ -81,6 +83,12 @@ def load_pois(seed: Path) -> tuple[list[dict], dict]:
 
 def load_context(seed: Path) -> dict:
     return _json(seed / "osm_context.json")
+
+
+def require(path: Path) -> Path:
+    if not path.is_file():
+        raise SourceError(f"{path} not found")
+    return path
 
 
 def _pmc_info(path: Path) -> dict[int, tuple[str, str]]:

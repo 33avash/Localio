@@ -137,6 +137,30 @@ def ward_places(conn: psycopg.Connection) -> dict[str, list[str]]:
     return dict(rows)
 
 
+def rent_streets(conn: psycopg.Connection, streets: list[dict]) -> tuple[dict[str, list[str]], list[str]]:
+    """Put each published rent street in the wards it runs through. A street
+    names its wards by official title ("ward:Koregaon Park") or by an OSM
+    place, which lands in whichever ward contains it ("place:Aundh"). Returns
+    ward key -> streets, and the references that matched no ward."""
+    matches: dict[str, list[str]] = {}
+    unmatched = []
+    for street in streets:
+        for ref in street["wards"]:
+            kind, name = ref.split(":", 1)
+            if kind == "ward":
+                rows = conn.execute("SELECT key FROM wards WHERE title = %s", (name,)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT DISTINCT w.key FROM wards w JOIN places pl ON ST_Contains(w.geom, pl.geom)
+                    WHERE pl.name = %s""", (name,)).fetchall()
+            if not rows:
+                unmatched.append(f"{street['street']} ({ref})")
+            for (key,) in rows:
+                if street["street"] not in matches.setdefault(key, []):
+                    matches[key].append(street["street"])
+    return matches, unmatched
+
+
 def ward_features(conn: psycopg.Connection) -> pd.DataFrame:
     """The capacity model's inputs, one row per ward. None of them is derived
     from the food and drink outlets the model predicts."""
