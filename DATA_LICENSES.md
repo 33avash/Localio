@@ -1,38 +1,39 @@
 # Licences
 
-The code in this repository is MIT licensed (see [LICENSE](LICENSE)). The data and the third-party tools it uses come under their own terms, listed here.
+Localio's code is MIT licensed (see [LICENSE](LICENSE)). The data and tools it uses come under their own terms, listed here.
 
 ## Data
 
 | Source | Used for | Terms |
 |---|---|---|
-| Google Places API, collected 2026-09-18 (`seed_data/pune_cafes_qsr.csv`) | the 260 cafes and QSRs | [Google Maps Platform Terms](https://cloud.google.com/maps-platform/terms). Included for coursework. It is **not** covered by this repository's MIT licence, and Google's terms limit storing and redistributing Places content. |
-| Meta High Resolution Settlement Layer v1.5.2 | population per catchment (`seed_data/catchments.geojson`) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). © Meta Platforms and CIESIN, Columbia University. |
-| OpenStreetMap | basemap tiles | [ODbL](https://www.openstreetmap.org/copyright). Attribution is shown on the map. |
-| CARTO basemaps (optional) | Positron tiles when a key is set | [CARTO basemap terms](https://carto.com/basemaps). Attribution is shown on the map. |
+| [DataMeet Pune wards](https://github.com/datameet/Pune_wards) (`seed_data/wards/`) | the 140 ward boundaries, PMC ward titles and 2012 voter rolls | [CC BY-SA 2.5 India](https://creativecommons.org/licenses/by-sa/2.5/in/), © DataMeet Trust. Share-alike: `wards.geojson`, derived from these boundaries, carries the same licence. |
+| Census of India 2011 | the PMC and PCMC population totals | [Government Open Data Licence – India](https://data.gov.in/government-open-data-license-india) |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) (`seed_data/osm_raw.json`, `osm_context.json`) | food and drink outlets, offices, colleges, stations, place names; basemap tiles | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/), © OpenStreetMap contributors. Attribution is shown on the map. |
+| Meta High Resolution Settlement Layer v1.5.2 | a cross-check column in `seed_data/ward_population.csv` (not used for scoring) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), © Meta Platforms and CIESIN |
+| [Cushman & Wakefield Pune Retail MarketBeat, Q2 2026](https://www.cushmanwakefield.com/en/india/insights/pune-marketbeat) (`seed_data/rent_high_streets.csv`) | prime rents for ten Pune high streets | Published figures, cited with their source. Not covered by the MIT licence. |
+| [Square Yards shop listings](https://www.squareyards.com/rent/shops-for-rent-in-pune) (`seed_data/rent_listings.csv`) | 25 asking rents, for the typical rent | Published figures, cited with their source. Not covered by the MIT licence. |
+| [DineOpen](https://www.dineopen.com/blog/restaurant-profit-margins-india-guide.html) (`seed_data/rent_benchmarks.csv`) | shop size and healthy rent share | Published figures, cited with their source. |
+| CARTO basemaps (optional) | quieter tiles when a key is set | [CARTO basemap terms](https://carto.com/basemaps) |
 | Google Gemini API (optional) | writing chat answers when a key is set | [Gemini API terms](https://ai.google.dev/gemini-api/terms). Free-tier prompts may be used to improve Google's products. |
+
+Earlier versions used a table of 260 outlets from the Google Places API. Google's terms restrict storing and redistributing Places content, so it was removed from the repository; it remains only in the git history of the old branches.
 
 ## Tools
 
 | Tool | Role | Licence |
 |---|---|---|
 | Docker Engine and Compose | containers and orchestration | Apache 2.0 |
-| Python 3.11 | pipeline runtime | PSF |
-| pandas | loading and aggregation | BSD 3-Clause |
-| openpyxl | reading `.xlsx` seeds | MIT |
-| NumPy | numeric work | BSD 3-Clause |
-| rasterio | reading the population raster | BSD 3-Clause |
-| Shapely | catchment geometry | BSD 3-Clause |
-| pyproj | coordinate transforms | MIT |
+| PostgreSQL and PostGIS | spatial joins | PostgreSQL Licence, GPL 2.0 |
+| Python 3.11 | pipeline and API | PSF |
+| pandas, NumPy | tables and numbers | BSD 3-Clause |
+| Shapely | ward geometry, label points | BSD 3-Clause |
+| psycopg | Python to PostgreSQL | LGPL 3.0 |
+| rasterio | reading the population raster (tools only) | BSD 3-Clause |
+| requests | calling Overpass (tools only) | Apache 2.0 |
 | nginx | web server | BSD 2-Clause |
 | Leaflet 1.9.4 | the map | BSD 2-Clause |
 | IBM Plex Sans and Mono | typefaces | SIL Open Font License 1.1 |
-| scikit-learn and SciPy | footfall model, market types | BSD 3-Clause |
-| FastAPI | chat API | MIT |
-| Uvicorn | ASGI server | BSD 3-Clause |
-| httpx | calls to Gemini | BSD 3-Clause |
-| fastembed | runs the embedding model | Apache 2.0 |
-| BAAI/bge-small-en-v1.5 | embedding model | MIT |
-| ONNX Runtime | model runtime under fastembed | MIT |
-| pytest | tests | MIT |
+| FastAPI, Uvicorn, httpx | chat API | MIT, BSD 3-Clause, BSD 3-Clause |
+| fastembed + BAAI/bge-small-en-v1.5 | matching questions to wards | Apache 2.0, MIT |
+| pytest, Playwright, axe-core | tests | MIT, Apache 2.0, MPL 2.0 |
 | GitHub Actions | CI | GitHub terms (hosted service) |
