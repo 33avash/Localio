@@ -86,6 +86,20 @@ test("off-topic questions are refused and name no ward", async ({ page }) => {
   }
 });
 
+test("a comparison calls a tie a tie", async ({ page }) => {
+  const text = await page.evaluate(async () => {
+    const { reply, wardIndex } = await import("/js/chat.js");
+    const { rank } = await import("/js/score.js");
+    const [wardsDoc, rent] = await Promise.all(["wards.geojson", "rent.json"].map((f) => fetch(`/data/${f}`).then((r) => r.json())));
+    const wards = wardsDoc.features;
+    const plan = { category: "fast_food", lens: "busy", area: "all", sqft: 300, budget: null, includeLow: false };
+    const context = { wards, meta: wardsDoc.meta, rent, plan, ranking: rank(wards, plan, rent), index: wardIndex(wards) };
+    return reply("Compare Baner and Aundh", context).text;
+  });
+  // Both score 51/100 for a QSR on Busy areas.
+  expect(text).toContain("they're level");
+});
+
 test("gaps, rent, the method and #1 are answered from the data", async ({ page }) => {
   const [gap, rent, method, why, stats] = await ask(page, [
     ["Which areas have no cafes yet?"], ["Cheapest rent for a cafe"], ["How is the score worked out?"],

@@ -35,6 +35,8 @@ jobs:
           mkdir -p site/data
           cp -r web/static/. site/
           cp output/wards.geojson output/pois.geojson output/rent.json site/data/
+          # nginx serves config.json locally; here there's no basemap key.
+          echo '{"cartoKey": ""}' > site/config.json
 
       - uses: actions/configure-pages@v6
 

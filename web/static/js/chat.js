@@ -263,10 +263,14 @@ function compare(named, facts) {
         + `${Math.round(p.demand * 100)}/100, rent ${rupees(monthlyRent(rent, p, plan.sqft))}/month`,
     };
   });
-  const best = [...rows].sort((a, b) => b.score - a.score)[0];
+  const [best, next] = [...rows].sort((a, b) => b.score - a.score);
+  // Scores are shown whole, so a lead under half a point would read as a tie.
+  const verdict = Math.round(best.score) === Math.round(next.score)
+    ? "they're level"
+    : `${best.ward.properties.name} comes out ahead`;
   return {
     kind: "compare",
-    text: `For a ${c.one} on ${LENSES[plan.lens].name}, ${best.ward.properties.name} comes out ahead:`,
+    text: `For a ${c.one} on ${LENSES[plan.lens].name}, ${verdict}:`,
     list: rows.map((row) => row.line),
     wards: rows.map((row) => row.ward),
   };
