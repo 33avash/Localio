@@ -14,15 +14,19 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 ## Scoring
 
-**A transparent index, not a model.** An earlier version trained a quantile regression to predict outlet density. It beat its baseline, but explained only 22% of the variation. Three percentiles averaged together tell a user as much and can be explained in one sentence, so the model went.
+**A transparent index, not a model.** An earlier version trained a quantile regression to predict outlet density. It beat its baseline but explained only 22% of the variation. Four parts a user can see and weigh tell them as much, and each can be explained in a sentence.
 
-**Busyness has three parts.** Where people live (residents per km²), where they already eat out (outlets per km²) and where they work, study or travel (offices, colleges, stations per km²). Residents alone favoured dense housing in the old city over commercial streets.
+**Four parts, each shown with its points.** Residents, eating out, daytime draw and low competition. An earlier version folded the first three into one "busyness" number; splitting them lets someone who cares about office workers say so, and every row and drawer shows what each part added.
 
-**Competition is `x / (x + median)`, not a rank.** Many wards have no cafes mapped. Ranking them made the step from 0 to 1 cafe as large as the step to 10. The ratio is 0 with none, 0.5 at the median, and grows gently.
+**The user sets the weights.** Sliders from 0 to 5 for each part, with three presets as starting points. The pipeline publishes the presets, so the site, the chat and the pipeline can't drift apart.
+
+**Competition against well-mapped wards.** The first version compared each ward with the city median, 0.23 cafes per 10,000 residents, dragged down by 100 wards where OpenStreetMap maps almost nothing; 72% of shortlistable wards then read as "heavy competition". The reference is now the rate across the 40 wards with 10 or more outlets mapped (2.49 cafes per 10,000).
+
+**"None mapped" isn't "none at all".** Every count gets one extra outlet before competition is measured. Without it, the two wards with no cafes mapped took full marks and led every list.
 
 **Wards need 10 outlets to be shortlisted.** With 4, the list was led by wards like Kadakmal Ali Hirabaug, next to Swargate, with 34,000 residents and 4 mapped outlets: gaps in the map, not the market. The other wards stay on the map, hatched.
 
-**Three priorities, two weights.** Busy areas (0.8/0.2), Balanced (0.5/0.5) and Low competition (0.2/0.8). The browser re-ranks instantly because the pipeline ships each ward's busyness and competition.
+**Scored from the published numbers.** The pipeline rounds each part to the 4 decimals it publishes before scoring, so the browser, working from the same file, reproduces every score exactly; a test checks all 280.
 
 ## Rent
 
@@ -42,19 +46,19 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 ## Front end
 
-**One screen, not a wizard.** The plan's five inputs sit above the top 5 and every change re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly.
+**One screen, not a wizard.** The plan's inputs sit above the top 5 and every change, including each slider, re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly.
 
-**Every score shows its parts.** Each row splits its score into busyness points and room (low-competition) points, so a ranking is never a bare number.
+**Every score shows its parts.** Each row shows the points from each of the four parts, which add up to its score, so a ranking is never a bare number.
 
 **Plain ES modules, no build step.** The site is a few small modules; a bundler would add a toolchain to install and break.
 
-**The URL is the plan.** Format, priority, area, size and budget live in the hash, so a link reopens the same shortlist.
+**The URL is the plan.** Format, weights, area, size and budget live in the hash, so a link reopens the same shortlist.
 
 ## Chat
 
 **In the browser, from the same files.** The chat reads the ward data the map uses, so the two can't disagree; a test checks the chat's top 5 equals the map's for every plan it's asked about. It needs no server, which is what lets the published site be a static page.
 
-**Rules, not a language model.** It finds ward names (official titles and the places inside each ward), reads format, priority, area, budget and size from the question, and picks one of a few answer types: a ward, a comparison, why a ward ranks where it does, rent, a ranking, gaps, or the method. A model would sound more fluent but could state numbers the data doesn't hold; this can't.
+**Rules, not a language model.** It finds ward names (official titles and the places inside each ward), reads format, area, budget, size and what matters ("near offices", "low competition") from the question, and picks one of a few answer types: a ward, a comparison, why a ward ranks where it does, rent, a ranking, gaps, or the method. A model would sound more fluent but could state numbers the data doesn't hold; this can't.
 
 **Refuse instead of guessing.** A question must name a ward or use a domain word (cafe, QSR, rent, ward, and so on). All 11 off-topic test questions are refused.
 
