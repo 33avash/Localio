@@ -2,7 +2,7 @@
 
 **Where in Pune should I open a cafe or a QSR?**
 
-Localio scores all 140 of Pune's wards on two things: how busy each one is, and how many places like yours are already there. Set your plan (format, priority, area, shop size, rent budget) and the map shows the best five wards, with the rent to expect and exactly why each one ranks where it does. A chat answers questions from the same data.
+Localio scores all 140 of Pune's wards on four things: how many people live there, how much they already eat out, what draws people in by day, and how many places like yours are there already. You decide how much each matters. The map shows the best five wards, the rent to expect, and every part of each score. A chat answers questions from the same data.
 
 **Try it:** https://33avash.github.io/Localio/
 
@@ -10,30 +10,36 @@ Localio scores all 140 of Pune's wards on two things: how busy each one is, and 
 
 ## Use it
 
-- **Plan.** Pick a format, a priority and an area; type a shop size and a rent budget. The top 5 update as you go, and each score is split into its two parts. Click a ward for the details.
+- **Plan.** Pick a format and an area, set how much each of the four parts matters (or start from a preset), and type a shop size and a rent budget. The top 5 update as you go, and every row shows its four parts. Click a ward for the full breakdown.
 - **Ask.** Questions like *"Why is #1 ranked first?"*, *"Compare Baner and Aundh"* or *"Cafes in PCMC under ₹30k rent"*. Answers use only Localio's data, name the wards they rely on, and can set your plan on the map. Anything off-topic is refused.
-- **Share.** The URL holds your plan (for example `#qsr/busy/pcmc?budget=40000`), so a link opens the same shortlist.
+- **Share.** The URL holds your plan (for example `#qsr/busy/pcmc?budget=40000`, or `#cafe/custom/all?w=1,1,5,3` for weights of your own), so a link opens the same shortlist.
 
 ## How a ward is scored
 
+Four parts, each from 0 to 1:
+
 | Part | What it measures | How |
 |---|---|---|
-| **Busyness** | where people live, eat out, work, study and travel | the average of the ward's rank (0 to 1) on residents per km², food and drink outlets per km², and offices, colleges and stations per km² |
-| **Competition** | how crowded your format is | your format's outlets per 10,000 residents, as `x / (x + city median)`: 0 with none, 0.5 at the median |
+| **Residents** | where people live | the ward's standing among Pune's 140 wards on residents per km² (0.8 = higher than 80% of them) |
+| **Eating out** | where people already go out | its standing on food and drink places per km², of every kind |
+| **Daytime draw** | what brings people in by day | its standing on offices, colleges and stations per km² |
+| **Low competition** | how crowded your format is | `1 − x / (x + r)`: x is your format's outlets per 10,000 residents (plus one, since OpenStreetMap misses outlets), r the same rate in the 40 well-mapped wards (2.49 cafes, 2.34 QSRs). It's 0.5 at that rate. |
 
 ```
-score = 100 × (busyness weight × busyness + competition weight × (1 − competition))
+score = 100 × Σ(weight × part) / Σ(weights)
 ```
 
-| Priority | Busyness weight | Competition weight |
-|---|---|---|
-| Busy areas | 0.8 | 0.2 |
-| Balanced | 0.5 | 0.5 |
-| Low competition | 0.2 | 0.8 |
+So each part adds `100 × its share of the weight × its value` points, and the four points add up to the score. You set each weight from 0 to 5; the presets are starting points:
+
+| Preset | Residents | Eating out | Daytime draw | Low competition |
+|---|---|---|---|---|
+| Balanced | 1 | 1 | 1 | 3 |
+| Busy areas | 3 | 3 | 3 | 2 |
+| Low competition | 1 | 1 | 1 | 5 |
+
+Wards with fewer than 10 outlets mapped are scored but kept off the top 5 unless you include them: that few usually means thin mapping, not an empty market. The pipeline scores from exactly the numbers it publishes, and a test checks the browser reproduces every score.
 
 **Rent** = typical Pune shop rent (₹137.5 per sq ft a month, the median of 25 listings) × the ward's tier (0.6× to 1.68×, from Cushman & Wakefield's published high-street rents) × your shop size. Localio doesn't forecast sales or profit; there's no open data to do that honestly.
-
-Wards with fewer than 10 outlets mapped are kept off the top 5 unless you include them: OpenStreetMap maps so few mostly where its coverage is thin, not where the market is empty.
 
 ## Run it yourself
 

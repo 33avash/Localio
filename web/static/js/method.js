@@ -1,11 +1,12 @@
 import { escapeHtml, num } from "./format.js";
-import { LENSES } from "./score.js";
+import { COMPONENTS, PRESET_NAMES } from "./score.js";
 
 // "How it works": the data, the score, rent, the chat and the limits, in
 // plain words. Every number is read from the pipeline's output.
 export function methodHtml({ meta, wards, rent }) {
-  const weights = Object.values(LENSES).map((l) =>
-    `<li>${l.name}: busyness ${num(`${l.weights.demand * 100}%`)}, competition ${num(`${l.weights.competition * 100}%`)}</li>`);
+  const { presets, reference_per_10k: reference } = meta.score;
+  const presetRows = Object.entries(presets).map(([name, w]) =>
+    `<li>${PRESET_NAMES[name]}: ${COMPONENTS.map((c) => `${c.label.toLowerCase()} ${num(w[c.key])}`).join(", ")}</li>`);
   const tiers = Object.entries(rent.tiers).map(([tier, t]) => `<li>${tier}: ${num(`${t.multiplier}×`)}
     ${t.streets.length ? `(${t.streets.map((s) => `${escapeHtml(s.street)} ₹${s.rent_psf}`).join(", ")})` : "(no published street)"}</li>`);
   const few = wards.filter((f) => f.properties.status !== "scored").length;
@@ -29,16 +30,22 @@ export function methodHtml({ meta, wards, rent }) {
 
     <section class="drawer-section">
       <h3>2. The score, out of 100</h3>
-      <p><strong>Busyness</strong> is how a ward ranks against the others on three things, averaged: residents per
-        km², food and drink outlets per km², and offices, colleges and stations per km².</p>
-      <p><strong>Competition</strong> is your format's outlets per 10,000 residents, set against the city median:
-        0 with none, 0.5 at the median, close to 1 when crowded.</p>
-      <p>Score = 100 × (busyness weight × busyness + competition weight × (1 − competition)). The two parts are
-        shown on every row as busyness points plus room (low-competition) points. The priority you pick sets the
-        weights:</p>
-      <ul class="plain">${weights.join("")}</ul>
-      <p class="note">${num(few)} wards have under ${num(meta.min_outlets)} outlets. They're scored, but hatched on the
-        map and left off the shortlist unless you include them: one missing outlet would move them a long way.</p>
+      <p>Four parts, each from 0 to 1:</p>
+      <ul class="plain">
+        <li><strong>Residents</strong>: residents per km², as the ward's standing among Pune's 140 wards (0.8 means
+          higher than 80% of them).</li>
+        <li><strong>Eating out</strong>: food and drink places per km², of every kind: where people already go out.</li>
+        <li><strong>Daytime draw</strong>: offices, colleges and stations per km²: what brings people in by day.</li>
+        <li><strong>Low competition</strong>: your format's outlets per 10,000 residents against the rate in
+          well-mapped wards (${num(reference.cafe.toFixed(2))} cafes, ${num(reference.fast_food.toFixed(2))} QSRs). It's 0.5
+          at that rate and higher with fewer. Every count gets one extra, because OpenStreetMap misses outlets.</li>
+      </ul>
+      <p>Score = 100 × Σ(weight × part) ÷ Σ(weights), so each part adds 100 × its share of the weight × its value, and
+        the parts add up to the score. You set the weights (0–5) with the sliders; the presets are starting points:</p>
+      <ul class="plain">${presetRows.join("")}</ul>
+      <p class="note">${num(few)} wards have under ${num(meta.min_outlets)} outlets mapped. They're scored, but hatched on
+        the map and left off the shortlist unless you include them: that few usually means thin mapping, not an empty
+        market.</p>
     </section>
 
     <section class="drawer-section">
@@ -57,17 +64,18 @@ export function methodHtml({ meta, wards, rent }) {
 
     <section class="drawer-section">
       <h3>4. The chat</h3>
-      <p>The chat runs in your browser on the same data as the map. It reads the format, priority, area, budget or
-        shop size from your question, answers with the numbers above, and names the wards it used, so every answer can be
-        checked on the map. There's no language model: anything that isn't about opening a cafe or QSR in Pune is
-        refused, not guessed.</p>
+      <p>The chat runs in your browser on the same data as the map. It reads the format, area, budget, shop size and
+        what matters to you ("near offices", "low competition") from your question, answers with the four parts above,
+        and names the wards it used, so every answer can be checked on the map. There's no language model: anything
+        that isn't about opening a cafe or QSR in Pune is refused, not guessed.</p>
     </section>
 
     <section class="drawer-section">
       <h3>5. What it can't tell you</h3>
       <ul class="plain">
         <li>OpenStreetMap misses outlets, most of all in Pimpri-Chinchwad, so "no cafes" can mean "none mapped".</li>
-        <li>Residents are 2011 figures; offices and new towers since then aren't in them.</li>
+        <li>Residents are 2011 Census totals shared across 2012 wards; Pimpri-Chinchwad has no voter roll, so its
+          wards share equally and their residents per km² mostly reflect ward size.</li>
         <li>The score compares wards. It doesn't forecast sales, and rent is a guide, not a quote.</li>
       </ul>
     </section>`;

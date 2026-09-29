@@ -1,23 +1,30 @@
-"""The score: how busy a ward is, against how much competition is there.
+"""The score: four components, weighted by what matters to the user.
 
-    demand      = mean of three percentiles across the 140 wards, each the
-                  share of other wards with a lower value (0 to 1):
-                    residents per km²                    where people live
-                    food and drink outlets per km²       where they eat out
-                    offices, colleges, stations per km²  where they work,
-                                                         study and travel
-    competition = this format's outlets per 10,000 residents, as
-                  x / (x + city median): 0 with none, 0.5 at the median,
-                  close to 1 when crowded
-    score       = 100 x (w_demand x demand + w_competition x (1 - competition))
+Each component runs from 0 to 1, higher is better for a new outlet:
 
-A score runs from 0 to 100. The three priorities only change the two
-weights, which is why the browser can re-rank instantly.
+    residents     how densely people live there: the ward's percentile
+                  among Pune's 140 wards on residents per km²
+    eating_out    how much people already eat out there: its percentile on
+                  food and drink outlets per km² (every kind)
+    daytime       what draws people in by day: its percentile on offices,
+                  colleges and stations per km²
+    room          how little competition your format has:
+                    1 - x / (x + reference)
+                  x is the format's outlets per 10,000 residents, counting
+                  one more than OpenStreetMap maps, since it misses outlets
+                  and "none mapped" isn't "none at all"; the reference is the
+                  same rate across the wards with enough outlets mapped to
+                  trust. At the reference, room is 0.5.
 
-Wards with fewer than MIN_OUTLETS food and drink outlets are scored but
-marked low confidence. OpenStreetMap maps so few outlets mostly where its
-coverage is thin, not where the market is empty, so they're left off the
-shortlist unless asked for.
+    score = 100 x sum(weight x component) / sum(weights)
+
+So each component contributes 100 x weight x component / sum(weights)
+points, and the points add up to the score. The presets are starting
+weights; the browser lets people move each one.
+
+Wards with fewer than MIN_OUTLETS food and drink outlets mapped are scored
+but marked low confidence: that few usually means thin mapping, not an
+empty market, so they're left off the shortlist unless asked for.
 """
 
 import pandas as pd
@@ -26,38 +33,56 @@ from localio import CATEGORIES
 
 MIN_OUTLETS = 10
 DRAWS = ("offices", "colleges", "stations")
+COMPONENTS = ("residents", "eating_out", "daytime", "room")
+# Outlets added to each ward's count before measuring competition.
+UNMAPPED = 1
+# Decimal places the components are published (and scored) with.
+PRECISION = 4
 
-# Priority -> weights. The browser (web/static/js/score.js) and the chat
-# (api/localio_api/facts.py) use the same three.
-LENSES = {
-    "busy": {"demand": 0.8, "competition": 0.2},
-    "balanced": {"demand": 0.5, "competition": 0.5},
-    "quiet": {"demand": 0.2, "competition": 0.8},
+# Starting weights (0-5 each). The site and the chat read these from
+# wards.geojson, so all three always agree.
+PRESETS = {
+    "balanced": {"residents": 1, "eating_out": 1, "daytime": 1, "room": 3},
+    "busy": {"residents": 3, "eating_out": 3, "daytime": 3, "room": 2},
+    "quiet": {"residents": 1, "eating_out": 1, "daytime": 1, "room": 5},
 }
-DEFAULT_LENS = "balanced"
+DEFAULT_PRESET = "balanced"
 
 
 def percentile(values: pd.Series) -> pd.Series:
     """The share of other wards with a strictly lower value (ties share the
-    lower rank), so the lowest is 0, the highest 1, and zero outlets is 0."""
+    lower rank), so the lowest is 0 and the highest 1."""
     if len(values) < 2:
         return pd.Series(0.0, index=values.index)
     return (values.rank(method="min") - 1) / (len(values) - 1)
 
 
-def score(wards: pd.DataFrame, lens: str = DEFAULT_LENS) -> pd.DataFrame:
+def references(wards: pd.DataFrame) -> dict[str, float]:
+    """Each format's outlets per 10,000 residents across the wards with
+    enough outlets mapped to trust."""
+    trusted = wards[wards["total_pois"] >= MIN_OUTLETS]
+    return {c: float(trusted[f"{c}_count"].sum() / trusted["population"].sum() * 10_000) for c in CATEGORIES}
+
+
+def score(wards: pd.DataFrame, weights: dict[str, float] | None = None) -> tuple[pd.DataFrame, dict[str, float]]:
+    weights = weights or PRESETS[DEFAULT_PRESET]
     scored = wards.copy()
     scored["low_confidence"] = scored["total_pois"] < MIN_OUTLETS
     scored["residents_per_km2"] = scored["population"] / scored["area_km2"]
+    scored["outlets_per_km2"] = scored["total_pois"] / scored["area_km2"]
     scored["draws"] = scored[list(DRAWS)].sum(axis=1)
     scored["draws_per_km2"] = scored["draws"] / scored["area_km2"]
-    scored["outlets_per_km2"] = scored["total_pois"] / scored["area_km2"]
-    scored["demand"] = (percentile(scored["residents_per_km2"]) + percentile(scored["outlets_per_km2"])
-                        + percentile(scored["draws_per_km2"])) / 3
-    weights = LENSES[lens]
+    # Components are rounded to the precision wards.geojson publishes, and
+    # the score is computed from those, so the browser, working from the
+    # published file, gets exactly the same score.
+    scored["residents"] = percentile(scored["residents_per_km2"]).round(PRECISION)
+    scored["eating_out"] = percentile(scored["outlets_per_km2"]).round(PRECISION)
+    scored["daytime"] = percentile(scored["draws_per_km2"]).round(PRECISION)
+    reference = references(scored)
+    total = sum(weights.values())
     for c in CATEGORIES:
-        per_10k = scored[f"{c}_per_10k"]
-        scored[f"{c}_competition"] = (per_10k / (per_10k + per_10k.median())).fillna(0.0)
-        scored[f"{c}_score"] = 100 * (weights["demand"] * scored["demand"]
-                                      + weights["competition"] * (1 - scored[f"{c}_competition"]))
-    return scored
+        x = (scored[f"{c}_count"] + UNMAPPED) / scored["population"] * 10_000
+        scored[f"{c}_room"] = (1 - x / (x + reference[c])).round(PRECISION)
+        parts = {name: scored[name] for name in COMPONENTS[:3]} | {"room": scored[f"{c}_room"]}
+        scored[f"{c}_score"] = 100 * sum(weights[name] * parts[name] for name in COMPONENTS) / total
+    return scored, reference

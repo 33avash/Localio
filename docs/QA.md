@@ -11,19 +11,21 @@
 
 ## 2. The plan
 - [ ] The top 5 shows straight away, for a cafe, Balanced, all of Pune, 300 sq ft.
-- [ ] Each row's two numbers (busy + room) add up to its score.
-- [ ] Switch priority and area: the list re-ranks, scores count to their new values, and the map's five markers follow.
+- [ ] Each row's four parts add up to its score.
+- [ ] Drag a slider: the shares and the list update as you drag, the URL switches to `custom`, and a preset button puts it back.
+- [ ] Switch preset and area: the list re-ranks, scores count to their new values, and the map's five markers follow.
 - [ ] Type 30000 as the rent budget: every rent in the list is at most ₹30k. Type 5000: the list says nothing fits and offers to raise the budget.
 - [ ] Reload. The same plan comes back from the URL; open it in another browser and it's the same there.
 
 ## 3. The drawer
-- [ ] Click a ward on the map, a numbered marker, or a row. The drawer shows its score (split into its parts), its rent, where the score comes from, the menu mix and a recommendation.
+- [ ] Click a ward on the map, a numbered marker, or a row. The drawer shows its score, a table of its four parts that adds up to it, its rent, where the score comes from, the menu mix and a recommendation.
 - [ ] Open a hatched ward (under 10 outlets). The drawer says its numbers are a lead to check.
 - [ ] "Ask about …" switches to Ask and answers about that ward.
 - [ ] Esc closes the drawer, and focus returns to what opened it.
 
 ## 4. Chat
-- [ ] "Why is #1 ranked first?" explains the current #1 in two parts.
+- [ ] "Why is #1 ranked first?" explains the current #1 part by part.
+- [ ] "Cafes near offices" turns the daytime weight up and offers the plan.
 - [ ] "Compare Baner and Aundh" compares them for your format.
 - [ ] "Cafes in PCMC under ₹30k rent" lists wards and offers "Use this plan on the map", which sets it.
 - [ ] A ward chip opens that ward's drawer.

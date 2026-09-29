@@ -11,7 +11,7 @@
 //   plan   a plan the question asked for, if it differs from the current one
 
 import { CATEGORIES, rupees } from "./format.js";
-import { AREAS, breakdown, competitionLevel, LENSES, monthlyRent, rank } from "./score.js";
+import { AREAS, competitionLevel, monthlyRent, parts, PRESET_NAMES, presetOf, rank, roundedParts, standing } from "./score.js";
 
 // A question must mention a ward or one of these to be in scope.
 const DOMAIN = /\b(caf[eé]s?|coffee|chai|tea|bakery|bakeries|desserts?|qsrs?|quick[- ]service|fast[- ]food|burgers?|pizzas?|momos?|restaurants?|food|eat|eating|outlets?|shops?|stalls?|rents?|footfall|busy|busyness|competitors?|competition|wards?|localit(y|ies)|neighbou?rhoods?|areas?|scores?|ranks?|ranked|shortlist|localio|pcmc|pmc)\b/i;
@@ -19,10 +19,17 @@ const FORMATS = {
   fast_food: /\b(qsrs?|quick[- ]service|fast[- ]food|burgers?|pizzas?|momos?|rolls?|sandwich(es)?|shawarma)\b/i,
   cafe: /\b(caf[eé]s?|coffee|chai|tea|bakery|bakeries|desserts?|ice[- ]cream)\b/i,
 };
-const LENS_WORDS = [
+// Words that pick a preset, and words that put one component at the top
+// weight (5) on top of whatever the weights were.
+const PRESET_WORDS = [
   ["quiet", /\b(competition|competitors?|fewest|least|unmet|under[- ]?served|gaps?|untapped|room|quiet|saturat\w*)\b/i],
   ["busy", /\b(busy|busiest|footfall|crowds|traffic|popular|demand|lively)\b/i],
   ["balanced", /\bbalanced?\b/i],
+];
+const EMPHASIS = [
+  ["daytime", /\b(offices?|office workers|colleges?|students?|stations?|commuters?|daytime|workers)\b/i],
+  ["residents", /\b(residential|residents|families|locals|housing)\b/i],
+  ["eating_out", /\b(eating out|food streets?|nightlife|hangouts?)\b/i],
 ];
 // "PCMC 56" is part of a ward's name, not the area.
 const AREA_WORDS = [
@@ -103,12 +110,16 @@ export function mentioned(question, index) {
 }
 
 // What the question asks for, on top of the current plan.
-export function parsePlan(question, plan) {
+export function parsePlan(question, plan, presets) {
   const asked = {};
   const formats = Object.keys(FORMATS).filter((key) => FORMATS[key].test(question));
   if (formats.length === 1) asked.category = formats[0];
-  const lens = LENS_WORDS.find(([, pattern]) => pattern.test(question));
-  if (lens) asked.lens = lens[0];
+  const preset = PRESET_WORDS.find(([, pattern]) => pattern.test(question));
+  let weights = preset ? { ...presets[preset[0]] } : null;
+  for (const [key, pattern] of EMPHASIS) {
+    if (pattern.test(question)) weights = { ...(weights ?? plan.weights), [key]: 5 };
+  }
+  if (weights) asked.weights = weights;
   const area = AREA_WORDS.find(([, pattern]) => pattern.test(question));
   if (area) asked.area = area[0];
   const budget = question.match(BUDGET);
@@ -134,7 +145,7 @@ export function reply(question, context) {
   if (INTENTS.help.test(q) && !named.length && !DOMAIN.test(q.replace(INTENTS.help, ""))) return help();
   if (!named.length && position === null && !DOMAIN.test(q)) return refuse();
 
-  const { asked, plan } = parsePlan(q, current);
+  const { asked, plan } = parsePlan(q, current, meta.score.presets);
   const facts = { wards, meta, rent, plan };
   if (INTENTS.method.test(q)) return method(plan, meta);
   if (position !== null && !named.length) {
@@ -161,7 +172,7 @@ function help() {
   return {
     kind: "help",
     text: "I answer from Localio's data on Pune's 140 wards: where a cafe or QSR would do well, what a ward "
-      + "looks like, why it ranks where it does, and what rent to expect. Try one of the suggestions.",
+      + "looks like, why it scores what it does, and what rent to expect. Try one of the suggestions.",
     wards: [],
   };
 }
@@ -176,14 +187,21 @@ function refuse() {
 }
 
 function method(plan, meta) {
-  const { weights, name } = LENSES[plan.lens];
+  const empty = { components: { residents: 0, eating_out: 0, daytime: 0 }, categories: { [plan.category]: { room: 0 } } };
+  const { items } = parts(empty, plan.category, plan.weights);
+  const reference = meta.score.reference_per_10k[plan.category];
   return {
     kind: "method",
-    text: `Each ward gets a score out of 100 from two parts. Busyness: how it ranks against the other wards on `
-      + `residents, food and drink outlets, and offices, colleges and stations per km². Competition: its `
-      + `${CATEGORIES[plan.category].many} per 10,000 residents against the city median. With "${name}", busyness `
-      + `counts ${weights.demand * 100}% and low competition ${weights.competition * 100}%. Wards with under `
-      + `${meta.min_outlets} outlets mapped are left off unless you include them.`,
+    text: `Each ward's score out of 100 adds up four parts, each 0 to 1 times its weight. With `
+      + `${weightsName(plan, meta)}, they count:`,
+    list: [
+      ...items.slice(0, 3).map((item) => `${item.label} (${Math.round(item.share * 100)}%): ${item.about}, as the ward's `
+        + "standing among Pune's 140 wards."),
+      `Low competition (${Math.round(items[3].share * 100)}%): ${CATEGORIES[plan.category].many} per 10,000 residents, `
+        + `against ${reference.toFixed(2)} in well-mapped wards; 0.5 at that rate, higher `
+        + "with fewer. Each count gets one extra, because OpenStreetMap misses outlets.",
+      `Wards with under ${meta.min_outlets} outlets mapped are left off unless you include them.`,
+    ],
     wards: [],
   };
 }
@@ -193,8 +211,8 @@ function about(ward, facts, position) {
   const p = ward.properties;
   const c = CATEGORIES[plan.category];
   const stats = p.categories[plan.category];
-  const part = breakdown(p, plan.category, plan.lens);
-  const level = competitionLevel(p, plan.category, meta.city.per_10k[plan.category]);
+  const score = parts(p, plan.category, plan.weights);
+  const level = competitionLevel(p, plan.category, meta.score.reference_per_10k[plan.category]);
   const rank = position ? ` It's #${position} on your shortlist.` : "";
   const outlets = p.total_pois
     ? `${p.total_pois} food and drink outlets, ${stats.count} of them ${c.many} (${level} competition)`
@@ -207,7 +225,7 @@ function about(ward, facts, position) {
   return {
     kind: "ward",
     text: `${label(p)} has ${p.population.toLocaleString("en-US")} residents and ${outlets}. For a `
-      + `${c.one} it scores ${Math.round(part.total)}/100 on ${LENSES[plan.lens].name}.${rank} Rent for `
+      + `${c.one} it scores ${Math.round(score.total)}/100 (${weightsName(plan, meta)}): ${sum(score)}.${rank} Rent for `
       + `${plan.sqft} sq ft is about ${rupees(monthlyRent(rent, p, plan.sqft))} a month.${shaky}`,
     wards: [ward],
   };
@@ -216,21 +234,20 @@ function about(ward, facts, position) {
 function why(ward, facts, position) {
   const { meta, plan } = facts;
   const p = ward.properties;
-  const part = breakdown(p, plan.category, plan.lens);
-  const stats = p.categories[plan.category];
-  const { weights } = LENSES[plan.lens];
+  const score = parts(p, plan.category, plan.weights);
   const place = position ? ` and is #${position} on your shortlist` : "";
+  const reference = meta.score.reference_per_10k[plan.category];
+  const stats = p.categories[plan.category];
   return {
     kind: "why",
-    text: `${p.name} scores ${Math.round(part.total)}/100 for a ${CATEGORIES[plan.category].one}${place}. The two parts:`,
-    list: [
-      `Busyness ${points(part.busy)}: its busyness is ${Math.round(p.demand * 100)}/100, with `
-        + `${p.residents_per_km2.toLocaleString("en-US")} residents and ${p.outlets_per_km2} outlets per km², weighted `
-        + `${weights.demand * 100}%.`,
-      `Low competition ${points(part.room)}: ${stats.count} ${CATEGORIES[plan.category].many} here, `
-        + `${stats.per_10k.toFixed(2)} per 10,000 residents against a city median of `
-        + `${meta.city.per_10k[plan.category].toFixed(2)}, weighted ${weights.competition * 100}%.`,
-    ],
+    text: `${p.name} scores ${Math.round(score.total)}/100 for a ${CATEGORIES[plan.category].one}${place}. `
+      + "Its four parts:",
+    list: score.items.map((item) => {
+      const head = `${item.label} ${points(item.points)} (weight ${Math.round(item.share * 100)}%): `;
+      if (item.key !== "room") return `${head}${item.measure(p, plan.category)}, ${standing(item.value)}.`;
+      return `${head}${stats.count} ${CATEGORIES[plan.category].many} mapped, ${stats.per_10k.toFixed(2)} per 10,000 `
+        + `residents against ${reference.toFixed(2)} in well-mapped wards.`;
+    }),
     wards: [ward],
   };
 }
@@ -254,29 +271,33 @@ function compare(named, facts) {
   const c = CATEGORIES[plan.category];
   const rows = named.slice(0, 4).map((ward) => {
     const p = ward.properties;
-    const stats = p.categories[plan.category];
+    const score = parts(p, plan.category, plan.weights);
+    const level = competitionLevel(p, plan.category, meta.score.reference_per_10k[plan.category]);
     return {
       ward,
-      score: breakdown(p, plan.category, plan.lens).total,
-      line: `${p.name}: ${Math.round(breakdown(p, plan.category, plan.lens).total)}/100, ${stats.count} ${c.many} `
-        + `(${competitionLevel(p, plan.category, meta.city.per_10k[plan.category])} competition), busyness `
-        + `${Math.round(p.demand * 100)}/100, rent ${rupees(monthlyRent(rent, p, plan.sqft))}/month`,
+      score: score.total,
+      line: `${p.name}: ${Math.round(score.total)}/100 = ${sum(score)}; ${p.categories[plan.category].count} ${c.many} `
+        + `(${level}), rent ${rupees(monthlyRent(rent, p, plan.sqft))}/month`,
     };
   });
-  const best = [...rows].sort((a, b) => b.score - a.score)[0];
+  const [best, next] = [...rows].sort((a, b) => b.score - a.score);
+  // Scores are shown whole, so a lead under half a point would read as a tie.
+  const verdict = Math.round(best.score) === Math.round(next.score)
+    ? "they're level"
+    : `${best.ward.properties.name} comes out ahead`;
   return {
     kind: "compare",
-    text: `For a ${c.one} on ${LENSES[plan.lens].name}, ${best.ward.properties.name} comes out ahead:`,
+    text: `For a ${c.one} (${weightsName(plan, meta)}), ${verdict}:`,
     list: rows.map((row) => row.line),
     wards: rows.map((row) => row.ward),
   };
 }
 
 function shortlist(facts, asked, current) {
-  const { wards, rent, plan } = facts;
+  const { wards, meta, rent, plan } = facts;
   const ranked = rank(wards, plan, rent).slice(0, 5);
   const c = CATEGORIES[plan.category];
-  const scope = describe(plan);
+  const scope = describe(plan, meta);
   if (!ranked.length) {
     return {
       kind: "ranking", text: `No ward fits this plan (${scope}). Try a higher rent budget or another area.`,
@@ -286,8 +307,8 @@ function shortlist(facts, asked, current) {
   return {
     kind: "ranking",
     text: `Top ${ranked.length} for a ${c.one} (${scope}):`,
-    list: ranked.map(({ feature, score }) => `${feature.properties.name}: ${Math.round(score)}/100, rent `
-      + `${rupees(monthlyRent(rent, feature.properties, plan.sqft))}/month`),
+    list: ranked.map(({ feature }) => `${feature.properties.name}: ${Math.round(parts(feature.properties, plan.category, plan.weights).total)}/100, `
+      + `rent ${rupees(monthlyRent(rent, feature.properties, plan.sqft))}/month`),
     wards: ranked.map(({ feature }) => feature),
     plan: changed(asked, current),
   };
@@ -296,18 +317,19 @@ function shortlist(facts, asked, current) {
 function gaps(facts) {
   const { wards, plan } = facts;
   const c = CATEGORIES[plan.category];
+  const score = (p) => parts(p, plan.category, plan.weights).total;
   const found = wards
     .filter(({ properties: p }) => p.status === "scored" && p.categories[plan.category].count === 0
       && (plan.area === "all" || p.corporation.toLowerCase() === plan.area))
-    .sort((a, b) => b.properties.demand - a.properties.demand)
+    .sort((a, b) => score(b.properties) - score(a.properties))
     .slice(0, 5);
   if (!found.length) {
     return { kind: "gap", text: `Every ward with enough data already has at least one ${c.one} mapped.`, wards: [] };
   }
   return {
     kind: "gap",
-    text: `Wards with no ${c.many} mapped yet, busiest first${plan.area === "all" ? "" : ` (${AREAS[plan.area]})`}:`,
-    list: found.map(({ properties: p }) => `${p.name}: busyness ${Math.round(p.demand * 100)}/100, ${p.total_pois} outlets of other kinds`),
+    text: `Wards with no ${c.many} mapped yet, best score first${plan.area === "all" ? "" : ` (${AREAS[plan.area]})`}:`,
+    list: found.map(({ properties: p }) => `${p.name}: ${Math.round(score(p))}/100, ${p.total_pois} outlets of other kinds`),
     wards: found,
   };
 }
@@ -338,15 +360,28 @@ function stats(meta) {
 
 // ---- Helpers --------------------------------------------------------------
 
-function describe(plan) {
-  const parts = [LENSES[plan.lens].name, AREAS[plan.area]];
+// "residents 12 + eating out 18 + daytime draw 9 + low competition 33",
+// rounded so the parts add up to the rounded score.
+function sum(score) {
+  const points = roundedParts(score.items);
+  return score.items.map((item, i) => `${item.label.toLowerCase()} ${points[i]}`).join(" + ");
+}
+
+function weightsName(plan, meta) {
+  const preset = presetOf(plan.weights, meta.score.presets);
+  return preset ? PRESET_NAMES[preset] : "your own weights";
+}
+
+function describe(plan, meta) {
+  const parts = [weightsName(plan, meta), AREAS[plan.area]];
   if (plan.budget) parts.push(`rent up to ${rupees(plan.budget)} for ${plan.sqft} sq ft`);
   return parts.join(", ");
 }
 
 // Only the settings the question asked for that differ from the plan.
 function changed(asked, current) {
-  const diff = Object.fromEntries(Object.entries(asked).filter(([key, value]) => current[key] !== value));
+  const diff = Object.fromEntries(Object.entries(asked)
+    .filter(([key, value]) => JSON.stringify(current[key]) !== JSON.stringify(value)));
   return Object.keys(diff).length ? diff : null;
 }
 

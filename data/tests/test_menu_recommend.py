@@ -1,9 +1,9 @@
 import pandas as pd
 
 from localio.menu import menu_type
-from localio.recommend import sentence
+from localio.recommend import level, sentence
 
-CITY = {"cafe": 0.3, "fast_food": 0.2}
+REFERENCE = {"cafe": 0.3, "fast_food": 0.2}
 
 
 def test_cuisine_tag_wins():
@@ -31,16 +31,23 @@ def _row(**overrides):
 
 
 def test_sentence_fills_every_slot_and_pluralises():
-    text = sentence(_row(), CITY)
+    text = sentence(_row(), REFERENCE)
     assert "{" not in text and "}" not in text
-    assert "no cafes yet among 12,345 residents" in text
+    assert "No cafes are mapped yet among 12,345 residents" in text
     assert "Only 1 outlet mapped here" in text
 
 
 def test_sentence_calls_a_close_race():
-    assert sentence(_row(fast_food_score=19.0, low_confidence=False), CITY).startswith("Cafe and QSR score about the same")
+    assert sentence(_row(fast_food_score=19.0, low_confidence=False), REFERENCE).startswith("Cafe and QSR score about the same")
 
 
-def test_near_median_is_not_called_crowded():
-    text = sentence(_row(cafe_count=3, cafe_per_10k=0.33, low_confidence=False), CITY)
-    assert "close to the city median" in text
+def test_near_the_reference_is_average_not_crowded():
+    text = sentence(_row(cafe_count=3, cafe_per_10k=0.33, low_confidence=False), REFERENCE)
+    assert "close to the 0.30 in well-mapped wards" in text
+
+
+def test_competition_levels():
+    assert level(0, 0.0, 1.0) == "none mapped"
+    assert level(1, 0.5, 1.0) == "light"
+    assert level(3, 1.5, 1.0) == "average"
+    assert level(9, 1.6, 1.0) == "heavy"

@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from localio import CATEGORIES
-from localio.score import DRAWS, MIN_OUTLETS
+from localio.score import DEFAULT_PRESET, DRAWS, MIN_OUTLETS, PRECISION, PRESETS, UNMAPPED
 
 
 def pois_collection(pois: pd.DataFrame, menu_types: pd.Series, names: pd.Series) -> dict:
@@ -37,7 +37,7 @@ def pois_collection(pois: pd.DataFrame, menu_types: pd.Series, names: pd.Series)
 
 
 def wards_collection(scored: pd.DataFrame, pois: pd.DataFrame, menu_mix: pd.DataFrame, tiers: pd.DataFrame,
-                     density_ranges: dict, city: dict, vintage: dict) -> dict:
+                     density_ranges: dict, reference: dict, vintage: dict) -> dict:
     features = [
         {"type": "Feature", "geometry": json.loads(row["geojson"]),
          "properties": _ward(key, row, menu_mix, tiers.loc[key])}
@@ -49,7 +49,9 @@ def wards_collection(scored: pd.DataFrame, pois: pd.DataFrame, menu_mix: pd.Data
         "category_counts": {c: int((pois["format"] == c).sum()) for c in CATEGORIES},
         "outlets": int(len(pois)),
         "density_ranges": density_ranges,
-        "city": city,
+        # The score's constants: the site and the chat read them from here.
+        "score": {"presets": PRESETS, "default": DEFAULT_PRESET, "reference_per_10k": reference,
+                  "unmapped": UNMAPPED},
         "vintage": vintage,
         "licence": "Ward boundaries © DataMeet, CC BY-SA 2.5 IN; outlets © OpenStreetMap contributors, ODbL",
     }
@@ -81,7 +83,9 @@ def _ward(key: str, row: pd.Series, menu_mix: pd.DataFrame, tier: pd.Series) -> 
         "residents_per_km2": round(row["residents_per_km2"]),
         "outlets_per_km2": num(row["outlets_per_km2"], 1),
         "draws": {d: int(row[d]) for d in DRAWS},
-        "demand": num(row["demand"], 3),
+        "draws_per_km2": num(row["draws_per_km2"], 2),
+        # Percentiles among the 140 wards, 0 to 1; room is per format below.
+        "components": {name: num(row[name], PRECISION) for name in ("residents", "eating_out", "daytime")},
         "total_pois": int(row["total_pois"]),
         "total_per_10k": num(row["total_per_10k"], 2),
         "total_density_class": int(row["total_density_class"]),
@@ -89,7 +93,9 @@ def _ward(key: str, row: pd.Series, menu_mix: pd.DataFrame, tier: pd.Series) -> 
             "count": int(row[f"{c}_count"]),
             "per_10k": num(row[f"{c}_per_10k"], 2),
             "density_class": int(row[f"{c}_density_class"]),
-            "competition": num(row[f"{c}_competition"], 3),
+            "room": num(row[f"{c}_room"], PRECISION),
+            # At the default preset; the browser recomputes for any weights.
+            "score": num(row[f"{c}_score"], 6),
         } for c in CATEGORIES},
         "rent": {"tier": tier["rent_tier"], "multiplier": float(tier["rent_multiplier"]),
                  "estimated": bool(tier["rent_estimated"]), "streets": list(tier["rent_streets"])},

@@ -38,6 +38,8 @@ const RANKINGS = [
   ["Where would a new fast food outlet do well?", { category: "fast_food" }],
   ["Cafes in PCMC under ₹30k rent", { area: "pcmc", budget: 30000 }],
   ["Best 500 sq ft cafe spot in Pune city", { area: "pmc", sqft: 500 }],
+  ["Where should a cafe near offices go?", { emphasis: "daytime" }],
+  ["Busy residential areas for a QSR", { category: "fast_food", lens: "busy", emphasis: "residents" }],
 ];
 
 const OFF_TOPIC = [
@@ -53,11 +55,17 @@ async function ask(page, questions) {
     const { rank } = await import("/js/score.js");
     const [wardsDoc, rent] = await Promise.all(["wards.geojson", "rent.json"].map((f) => fetch(`/data/${f}`).then((r) => r.json())));
     const wards = wardsDoc.features;
-    const plan = { category: "cafe", lens: "balanced", area: "all", sqft: 300, budget: null, includeLow: false };
+    const { presets } = wardsDoc.meta.score;
+    const plan = { category: "cafe", weights: { ...presets.balanced }, area: "all", sqft: 300, budget: null, includeLow: false };
     const context = { wards, meta: wardsDoc.meta, rent, plan, ranking: rank(wards, plan, rent), index: wardIndex(wards) };
+    // What a question asks for, as a plan: a preset by name, then one part at the top weight.
+    const planFor = ({ lens, emphasis, ...rest }) => {
+      const weights = { ...(lens ? presets[lens] : plan.weights), ...(emphasis ? { [emphasis]: 5 } : {}) };
+      return { ...plan, ...rest, weights };
+    };
     return questions.map(([q, asked]) => {
       const answer = reply(q, context);
-      const expected = asked ? rank(wards, { ...plan, ...asked }, rent).slice(0, 5).map((r) => r.feature.properties.name) : null;
+      const expected = asked ? rank(wards, planFor(asked), rent).slice(0, 5).map((r) => r.feature.properties.name) : null;
       return { q, kind: answer.kind, wards: answer.wards.map((w) => w.properties.name), plan: answer.plan, expected };
     });
   }, { questions });
@@ -84,6 +92,23 @@ test("off-topic questions are refused and name no ward", async ({ page }) => {
     expect(kind, q).toBe("refuse");
     expect(wards, q).toEqual([]);
   }
+});
+
+test("a comparison calls a tie a tie", async ({ page }) => {
+  const text = await page.evaluate(async () => {
+    const { reply, wardIndex } = await import("/js/chat.js");
+    const { rank } = await import("/js/score.js");
+    const [wardsDoc, rent] = await Promise.all(["wards.geojson", "rent.json"].map((f) => fetch(`/data/${f}`).then((r) => r.json())));
+    // A ward and an identical copy under another name must come out level.
+    const baner = wardsDoc.features.find((f) => f.properties.name === "Baner Balewadi");
+    const twin = { ...baner, properties: { ...baner.properties, name: "Twin Ward", aliases: [] } };
+    const wards = [baner, twin];
+    const plan = { category: "fast_food", weights: { ...wardsDoc.meta.score.presets.busy }, area: "all", sqft: 300,
+      budget: null, includeLow: false };
+    const context = { wards, meta: wardsDoc.meta, rent, plan, ranking: rank(wards, plan, rent), index: wardIndex(wards) };
+    return reply("Compare Baner and Twin Ward", context).text;
+  });
+  expect(text).toContain("they're level");
 });
 
 test("gaps, rent, the method and #1 are answered from the data", async ({ page }) => {

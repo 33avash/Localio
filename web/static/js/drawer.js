@@ -1,5 +1,6 @@
 import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
-import { breakdown, competitionLevel, LENSES, monthlyRent } from "./score.js";
+import { partsBar, weightsName } from "./panel.js";
+import { competitionLevel, monthlyRent, parts, roundedParts, standing } from "./score.js";
 
 // Menu types in the order the stacked bar draws them, each with a muted
 // colour that stays clear of the teal accent and the density ramp.
@@ -18,12 +19,13 @@ const MENU = [
   ["Restaurant, no cuisine tagged", "#4E545C"],
 ];
 
-// One ward: its score and rent up top, each explained right under it,
-// then what's there already, the recommendation and the sources.
+// One ward: its score and rent up top, then every part of the score with
+// the numbers behind it, what's there already, the recommendation and the
+// sources.
 export function drawerHtml(ward, { plan, meta, rent, position }) {
   const p = ward.properties;
   const c = CATEGORIES[plan.category];
-  const part = breakdown(p, plan.category, plan.lens);
+  const score = parts(p, plan.category, plan.weights);
   const monthly = monthlyRent(rent, p, plan.sqft);
   const [low, high] = rent.healthy_share;
   const flag = p.status === "scored" ? ""
@@ -47,12 +49,9 @@ export function drawerHtml(ward, { plan, meta, rent, position }) {
     <div class="stats">
       <section class="stat">
         <h3>Score for a ${c.one}</h3>
-        <p class="stat-value"><span class="num">${Math.round(part.total)}</span><span class="stat-unit">/100</span></p>
-        <span class="split" aria-hidden="true"><span class="split-busy" style="width:${part.busy.toFixed(1)}%"></span><span
-          class="split-room" style="width:${part.room.toFixed(1)}%"></span></span>
-        <p class="stat-note"><span class="key key-busy"></span>${num(Math.round(part.busy))} busyness
-          <span class="key key-room"></span>${num(Math.round(part.room))} low competition</p>
-        <p class="stat-note">${LENSES[plan.lens].name} · ${standing}</p>
+        <p class="stat-value"><span class="num">${Math.round(score.total)}</span><span class="stat-unit">/100</span></p>
+        ${partsBar(score.items)}
+        <p class="stat-note">${weightsName(plan.weights, meta.score.presets)} · ${standing}</p>
       </section>
       <section class="stat">
         <h3>Rent for ${num(plan.sqft)} sq ft</h3>
@@ -64,7 +63,7 @@ export function drawerHtml(ward, { plan, meta, rent, position }) {
     <p class="body-text">To keep rent to ${Math.round(low * 100)}–${Math.round(high * 100)}% of sales, you'd need
       ${num(rupees(monthly / high))}–${num(rupees(monthly / low))} a month in sales.</p>
 
-    ${why(p, plan, meta)}
+    ${breakdown(p, plan, meta, score)}
 
     <section class="drawer-section">
       <h3>On the menu already</h3>
@@ -82,29 +81,36 @@ export function drawerHtml(ward, { plan, meta, rent, position }) {
     </footer>`;
 }
 
-// The numbers behind the two parts of the score.
-function why(p, plan, meta) {
-  const c = CATEGORIES[plan.category];
-  const stats = p.categories[plan.category];
-  const d = p.draws;
+// Every part of the score: what it measures here, its value, its weight
+// and the points it adds. The points column adds up to the score.
+function breakdown(p, plan, meta, score) {
+  const points = roundedParts(score.items);
+  const reference = meta.score.reference_per_10k[plan.category];
+  const level = competitionLevel(p, plan.category, reference);
+  const rows = score.items.map((item, i) => {
+    const detail = item.key === "room"
+      ? `${item.measure(p, plan.category)}; ${reference.toFixed(2)} in well-mapped wards · ${level}`
+      : `${item.measure(p, plan.category)} · ${standing(item.value)}`;
+    return `
+      <tr>
+        <th scope="row"><span class="key" style="background:${item.colour}"></span>${item.label}
+          <span class="row-detail">${escapeHtml(detail)}</span></th>
+        <td class="num">${item.value.toFixed(2)}</td>
+        <td class="num">${Math.round(item.share * 100)}%</td>
+        <td class="num">${points[i]}</td>
+      </tr>`;
+  });
   return `
     <section class="drawer-section">
-      <h3>Where the score comes from</h3>
-      <dl class="figures">
-        ${figure("Busyness", `${Math.round(p.demand * 100)}/100`, "its rank on the three figures below")}
-        ${figure(`${c.label}s per 10k residents`, stats.per_10k.toFixed(2),
-          `${stats.count} here · city median ${meta.city.per_10k[plan.category].toFixed(2)} · `
-          + `${competitionLevel(p, plan.category, meta.city.per_10k[plan.category])} competition`)}
-        ${figure("Residents per km²", p.residents_per_km2.toLocaleString("en-US"), `${p.population.toLocaleString("en-US")} residents`)}
-        ${figure("Food and drink per km²", p.outlets_per_km2.toFixed(1), `${p.total_pois} outlets of every kind`)}
-        ${figure("Offices, colleges, stations", d.offices + d.colleges + d.stations,
-          `${d.offices} offices, ${d.colleges} colleges, ${d.stations} stations`)}
-      </dl>
+      <h3>How the score adds up</h3>
+      <table class="parts-table">
+        <thead><tr><td></td><th scope="col">0–1</th><th scope="col">Weight</th><th scope="col">Points</th></tr></thead>
+        <tbody>${rows.join("")}</tbody>
+        <tfoot><tr><th scope="row">Score</th><td></td><td></td><td class="num">${Math.round(score.total)}</td></tr></tfoot>
+      </table>
+      <p class="note">Residents, eating out and daytime draw are the ward's standing among Pune's 140 wards. Low
+        competition is 0.5 at the rate in well-mapped wards, higher with fewer.</p>
     </section>`;
-}
-
-function figure(label, value, detail) {
-  return `<div><dt>${label}</dt><dd><span class="num">${value}</span><span class="range">${detail}</span></dd></div>`;
 }
 
 function list(items) {
@@ -112,12 +118,12 @@ function list(items) {
 }
 
 function menuBar(menu) {
-  const parts = MENU.filter(([kind]) => menu[kind]).map(([kind, color]) => ({ kind, color, share: menu[kind] }));
-  if (!parts.length) return '<p class="body-text">No outlets are mapped here yet.</p>';
-  const segments = parts.map((part) =>
+  const shown = MENU.filter(([kind]) => menu[kind]).map(([kind, color]) => ({ kind, color, share: menu[kind] }));
+  if (!shown.length) return '<p class="body-text">No outlets are mapped here yet.</p>';
+  const segments = shown.map((part) =>
     `<span style="width:${part.share * 100}%; background:${part.color}" title="${part.kind} ${Math.round(part.share * 100)}%"></span>`);
-  const keys = parts.map((part) =>
+  const keys = shown.map((part) =>
     `<li><span class="key" style="background:${part.color}"></span>${part.kind} ${num(`${Math.round(part.share * 100)}%`)}</li>`);
-  return `<div class="stack" role="img" aria-label="Menu mix: ${parts.map((part) =>
+  return `<div class="stack" role="img" aria-label="Menu mix: ${shown.map((part) =>
     `${part.kind} ${Math.round(part.share * 100)}%`).join(", ")}">${segments.join("")}</div><ul class="stack-keys">${keys.join("")}</ul>`;
 }

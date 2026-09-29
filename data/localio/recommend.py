@@ -1,15 +1,25 @@
 """One sentence per ward: which format fits better here, and why.
 
-Every number in it comes from the ward's own row. The template is filled
-with str.format, and the pipeline checks no "{" survives into the output.
+Every number in it comes from the ward's own row, and competition is
+described against the rate in well-mapped wards, the same reference the
+score uses. The template is filled with str.format, and the pipeline
+checks no "{" survives into the output.
 """
 
 import pandas as pd
 
 LABELS = {"cafe": ("cafe", "cafes"), "fast_food": ("QSR", "QSRs")}
 CLOSE_CALL = 3.0
-# Above this multiple of the city median, a ward counts as well served.
-CROWDED = 1.5
+
+
+def level(count: int, per_10k: float, reference: float) -> str:
+    """How crowded a format is: "none mapped", "light", "average" or
+    "heavy". The site and the chat use the same lines (web/static/js/score.js)."""
+    if count == 0:
+        return "none mapped"
+    ratio = per_10k / reference
+    return "light" if ratio <= 0.5 else "average" if ratio <= 1.5 else "heavy"
+
 
 LEADS = {
     "wins": "A {best} is the better bet here: it scores {best_score} out of 100, against {other_score} for a {other}.",
@@ -17,16 +27,16 @@ LEADS = {
              "than the format.",
 }
 REASONS = {
-    "gap": " There are no {best_many} yet among {residents} residents.",
-    "thin": " There are {best_per_10k} {best_many} per 10,000 residents, against a city median of {city_per_10k}.",
-    "typical": " It has {best_per_10k} {best_many} per 10,000 residents, close to the city median of {city_per_10k}.",
-    "crowded": " It's already well served, with {best_per_10k} {best_many} per 10,000 residents against a city "
-               "median of {city_per_10k}, so the case rests on how busy it is, not a gap.",
+    "none mapped": " No {best_many} are mapped yet among {residents} residents.",
+    "light": " It has {best_per_10k} {best_many} per 10,000 residents, well under the {reference} in well-mapped wards.",
+    "average": " It has {best_per_10k} {best_many} per 10,000 residents, close to the {reference} in well-mapped wards.",
+    "heavy": " It's already well served, with {best_per_10k} {best_many} per 10,000 residents against {reference} in "
+             "well-mapped wards, so the case rests on how busy it is.",
 }
 LOW_CONFIDENCE = " Only {outlets} mapped here, so check on the ground before relying on it."
 
 
-def sentence(row: pd.Series, city_per_10k: dict[str, float]) -> str:
+def sentence(row: pd.Series, reference: dict[str, float]) -> str:
     scores = {c: row[f"{c}_score"] for c in LABELS}
     best = max(scores, key=scores.get)
     other = "fast_food" if best == "cafe" else "cafe"
@@ -40,18 +50,11 @@ def sentence(row: pd.Series, city_per_10k: dict[str, float]) -> str:
         "cafe_score": f"{scores['cafe']:.0f}",
         "qsr_score": f"{scores['fast_food']:.0f}",
         "best_per_10k": f"{per_10k:.2f}",
-        "city_per_10k": f"{city_per_10k[best]:.2f}",
+        "reference": f"{reference[best]:.2f}",
         "residents": f"{int(row['population']):,}",
         "outlets": f"{int(row['total_pois'])} outlet{'' if row['total_pois'] == 1 else 's'}",
     }
     lead = LEADS["close" if abs(scores["cafe"] - scores["fast_food"]) < CLOSE_CALL else "wins"]
-    if row[f"{best}_count"] == 0:
-        reason = REASONS["gap"]
-    elif per_10k <= city_per_10k[best]:
-        reason = REASONS["thin"]
-    elif per_10k <= CROWDED * city_per_10k[best]:
-        reason = REASONS["typical"]
-    else:
-        reason = REASONS["crowded"]
+    reason = REASONS[level(int(row[f"{best}_count"]), per_10k, reference[best])]
     text = lead + reason + (LOW_CONFIDENCE if row["low_confidence"] else "")
     return text.format(**values)

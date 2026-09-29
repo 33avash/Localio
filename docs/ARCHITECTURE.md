@@ -14,7 +14,7 @@ flowchart LR
         direction TB
         load["load seed files"] --> join["place outlets in wards<br/>ST_Contains"]
         join --> count["counts, per 10k residents"]
-        count --> score["busyness, competition,<br/>rent tier, recommendation"]
+        count --> score["four score parts,<br/>rent tier, recommendation"]
         score --> check{"checks"}
     end
 
@@ -49,7 +49,7 @@ flowchart LR
 - **Start order.** `data` waits for `db` to be healthy; `web` waits for `data` to finish successfully. A failed check means the site never shows bad numbers.
 - **No stale state.** The database uses tmpfs, `./output` is a bind mount rather than a named volume, and nginx serves `/data/` with `Cache-Control: no-store`. Every run shows that run's numbers.
 - **Atomic writes.** The pipeline writes each file to a `.tmp` sibling and then renames it, so nginx never serves half a file.
-- **The browser does the interactive work.** The pipeline ships each ward's busyness, competition and rent tier, so changing the plan re-ranks instantly, and the chat answers from the same files with no server.
+- **The browser does the interactive work.** The pipeline ships each ward's four score parts, the presets and its rent tier, so changing the plan or any weight re-ranks instantly, and the chat answers from the same files with no server.
 - **Offline by default.** Seed data, Leaflet and the fonts are committed. The only runtime network use is map tiles, and the map still works without them.
 
 ## Publishing
