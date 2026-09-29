@@ -1,49 +1,68 @@
-"""The score: percentiles, the three priorities, and low confidence."""
+"""The score: its four components, the competition reference, and the
+weighted formula."""
 
 import pandas as pd
 import pytest
 
 from localio import db
-from localio.score import LENSES, percentile, score
+from localio.score import COMPONENTS, MIN_OUTLETS, PRESETS, percentile, references, score
 
 
 def test_percentile_is_the_share_of_wards_below():
     assert percentile(pd.Series([10, 20, 30, 40, 50])).tolist() == [0.0, 0.25, 0.5, 0.75, 1.0]
-    # Wards with no outlets all share the bottom.
+    # Ties share the lower rank, so wards with nothing all sit at 0.
     assert percentile(pd.Series([0, 0, 0, 5])).tolist() == [0.0, 0.0, 0.0, 1.0]
 
 
 def _wards():
     return pd.DataFrame({
-        "population": [40_000, 30_000, 10_000],
-        "area_km2": [2.0, 2.0, 4.0],
-        "offices": [30, 2, 0], "colleges": [2, 1, 0], "stations": [1, 0, 0],
-        "total_pois": [40, 12, 2],
-        "cafe_per_10k": [5.0, 0.5, 0.0], "fast_food_per_10k": [3.0, 0.0, 0.0],
-    }, index=["busy", "middling", "quiet"])
+        "population": [40_000, 30_000, 20_000, 10_000],
+        "area_km2": [2.0, 2.0, 2.0, 4.0],
+        "offices": [30, 2, 1, 0], "colleges": [2, 1, 0, 0], "stations": [1, 0, 0, 0],
+        "total_pois": [40, 20, 12, 2],
+        "cafe_count": [20, 3, 0, 0], "fast_food_count": [12, 0, 1, 0],
+    }, index=["busy", "middling", "gap", "thin"])
 
 
-def test_busy_ward_has_top_demand_and_scores_stay_in_range():
-    scored = score(_wards())
-    assert scored["demand"].idxmax() == "busy"
-    assert scored.loc["busy", "demand"] == 1.0
+def test_the_reference_uses_only_well_mapped_wards():
+    # "thin" has 2 outlets, under MIN_OUTLETS, so its residents don't dilute the rate.
+    assert MIN_OUTLETS == 10
+    assert references(_wards())["cafe"] == pytest.approx((20 + 3 + 0) / 90_000 * 10_000)
+
+
+def test_room_counts_one_unmapped_outlet_and_is_half_at_the_reference():
+    scored, reference = score(_wards())
+    # "gap" has no cafes mapped: it's read as one, so its room is high but not 1.
+    x = (0 + 1) / 20_000 * 10_000
+    assert scored.loc["gap", "cafe_room"] == pytest.approx(1 - x / (x + reference["cafe"]), abs=1e-4)
+    assert 0.5 < scored.loc["gap", "cafe_room"] < 1
+    # The crowded ward, about twice the reference rate, has well under half.
+    assert scored.loc["busy", "cafe_room"] < 0.5
+
+
+def test_the_score_is_the_weighted_mean_of_its_components():
+    weights = {"residents": 2, "eating_out": 0, "daytime": 1, "room": 1}
+    scored, _ = score(_wards(), weights)
+    row = scored.loc["middling"]
+    expected = 100 * (2 * row["residents"] + 1 * row["daytime"] + 1 * row["cafe_room"]) / 4
+    assert row["cafe_score"] == pytest.approx(expected)
     assert scored[["cafe_score", "fast_food_score"]].stack().between(0, 100).all()
 
 
-def test_the_priority_changes_the_leader():
-    leaders = {lens: score(_wards(), lens)["cafe_score"].idxmax() for lens in LENSES}
+def test_busy_areas_and_low_competition_rank_differently():
+    leaders = {name: score(_wards(), w)[0]["cafe_score"].idxmax() for name, w in PRESETS.items()}
     assert leaders["busy"] == "busy"
     assert leaders["quiet"] != "busy"
 
 
-def test_the_score_formula():
-    scored = score(_wards(), "balanced")
-    row = scored.loc["middling"]
-    assert row["cafe_score"] == pytest.approx(100 * (0.5 * row["demand"] + 0.5 * (1 - row["cafe_competition"])))
+def test_presets_weight_every_component():
+    for weights in PRESETS.values():
+        assert set(weights) == set(COMPONENTS) and sum(weights.values()) > 0
 
 
 def test_wards_with_few_outlets_are_low_confidence():
-    assert score(_wards())["low_confidence"].tolist() == [False, False, True]
+    scored, _ = score(_wards())
+    assert scored["low_confidence"].tolist() == [False, False, False, True]
 
 
 def test_draws_are_counted_inside_each_ward(loaded):

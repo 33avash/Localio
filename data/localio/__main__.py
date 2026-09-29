@@ -19,7 +19,7 @@ from pathlib import Path
 
 import psycopg
 
-from localio import CATEGORIES, db, rent, sources
+from localio import db, rent, sources
 from localio.aggregate import aggregate
 from localio.density import add_density
 from localio.export import pois_collection, wards_collection, write_json
@@ -65,9 +65,11 @@ def main() -> int:
     if not all(check.ok for check in checks):
         return _finish(checks)
 
-    scored = score(wards)
-    city = {"per_10k": {key: round(float(scored[f"{key}_per_10k"].median()), 2) for key in (*CATEGORIES, "total")}}
-    scored["recommendation"] = scored.apply(sentence, axis=1, city_per_10k=city["per_10k"])
+    scored, reference = score(wards)
+    reference = {c: round(value, 2) for c, value in reference.items()}
+    _line("reference", ", ".join(f"{value} {c} per 10k" for c, value in reference.items())
+          + f" (the {int((~scored['low_confidence']).sum())} well-mapped wards)")
+    scored["recommendation"] = scored.apply(sentence, axis=1, reference=reference)
     factor = rent.multipliers(streets, float(benchmarks["emerging_multiplier"]["low"]))
     tiers = rent.assign_tiers(scored, street_matches, streets, factor)
     checks += check_scores(scored) + check_sentences(scored["recommendation"]) + check_rent(tiers, unmatched)
@@ -80,7 +82,7 @@ def main() -> int:
     outputs = {
         "pois.geojson": pois_collection(pois, menu_types, scored["name"]),
         "wards.geojson": wards_collection(scored, pois, mix(pois, menu_types, scored.index), tiers,
-                                          density_ranges, city, vintage),
+                                          density_ranges, reference, vintage),
         "rent.json": rent.summary(rent.typical_rent(listings), factor, streets, benchmarks, listings),
     }
     for filename, document in outputs.items():

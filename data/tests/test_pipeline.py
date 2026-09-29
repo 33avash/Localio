@@ -29,7 +29,9 @@ def test_clean_run_writes_all_three_files(monkeypatch, tmp_path, seed_dir):
     for ward in wards:
         p = ward["properties"]
         assert p["rent"]["tier"] in ("premium", "high", "mid", "value", "emerging")
-        assert 0 <= p["demand"] <= 1 and "{" not in p["recommendation"]
+        assert all(0 <= v <= 1 for v in p["components"].values()) and "{" not in p["recommendation"]
+        for c in p["categories"].values():
+            assert 0 <= c["room"] <= 1 and 0 <= c["score"] <= 100
 
 
 def test_an_oversized_ward_fails_and_writes_nothing(monkeypatch, tmp_path, seed_dir):
