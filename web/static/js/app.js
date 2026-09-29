@@ -4,8 +4,8 @@ import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
 import { methodHtml } from "./method.js";
 import { countUp } from "./motion.js";
-import { renderLoadError, renderPanel, renderResults } from "./panel.js";
-import { AREAS, LENSES, rank } from "./score.js";
+import { renderLoadError, renderPanel, renderResults, updateWeights } from "./panel.js";
+import { AREAS, COMPONENTS, presetOf, rank } from "./score.js";
 import { enableSheet } from "./sheet.js";
 
 const panel = document.getElementById("panel");
@@ -63,7 +63,7 @@ const SHEET_MS = 260;
 
 // Setting a plan value from a button, the chat or the empty state.
 const PARSE = {
-  category: String, lens: String, area: String,
+  category: String, area: String,
   budget: (v) => (v === "" || v === null ? null : Number(v)),
   sqft: Number,
   includeLow: (v) => v === true || v === "true",
@@ -72,6 +72,7 @@ const PARSE = {
 const actions = {
   set: (control) => { state.plan[control.dataset.key] = PARSE[control.dataset.key](control.dataset.value); },
   tab: (control) => { state.tab = control.dataset.value; },
+  preset: (control) => { state.plan.weights = { ...presets()[control.dataset.value] }; },
   apply: (control) => {
     Object.assign(state.plan, state.conversation.messages[Number(control.dataset.value)].plan);
     state.tab = "plan";
@@ -126,8 +127,9 @@ panel.addEventListener("submit", (event) => {
   send(event.target.querySelector("textarea").value);
 });
 
-// Typing a size or budget re-ranks as you type; the field keeps its focus.
-// A value that isn't sensible is marked and ignored until it is.
+// Typing a size or budget, or moving a weight, re-ranks as you go; the
+// field keeps its focus. A size or budget that isn't sensible is marked
+// and ignored until it is.
 const FIELDS = {
   sqft: { key: "sqft", ok: (v) => v >= 50 && v <= 5000 },
   budget: { key: "budget", ok: (v) => v >= 1000, blank: null },
@@ -135,6 +137,12 @@ const FIELDS = {
 
 panel.addEventListener("input", (event) => {
   if (event.target.id === "ask-input") state.conversation.draft = event.target.value;
+  if (event.target.dataset.weight) {
+    state.plan.weights = { ...state.plan.weights, [event.target.dataset.weight]: Number(event.target.value) };
+    updateWeights(regions.body, state.plan.weights, presets());
+    render({ resultsOnly: true });
+    return;
+  }
   const field = FIELDS[event.target.id];
   if (!field) return;
   const raw = event.target.value.trim();
@@ -160,6 +168,12 @@ document.addEventListener("keydown", (event) => {
 
 function ranking() {
   return rank(data.wards, state.plan, data.rent);
+}
+
+// The presets come from the pipeline's output, so the site, the chat and
+// the pipeline share one set.
+function presets() {
+  return data.meta.score.presets;
 }
 
 function render({ resultsOnly = false } = {}) {
@@ -242,17 +256,23 @@ function closeDrawer() {
   returnFocus = null;
 }
 
-// The URL records the plan, e.g. #qsr/busy/pcmc?sqft=450&budget=40000, so
-// a shortlist can be shared and reopened exactly as it looked.
+// The URL records the plan, e.g. #qsr/busy/pcmc?sqft=450&budget=40000, or
+// #cafe/custom/all?w=2,1,3,4 for weights of your own, so a shortlist can
+// be shared and reopened exactly as it looked.
 function readHash() {
   const [path, query = ""] = decodeURIComponent(location.hash.slice(1)).split("?");
-  const [slug, lens, area] = path.split("/");
+  const [slug, weighting, area] = path.split("/");
   const params = new URLSearchParams(query);
   const sqft = Number(params.get("sqft"));
   const budget = Number(params.get("budget"));
+  const custom = (params.get("w") ?? "").split(",").map(Number);
+  const weights = weighting === "custom" && custom.length === COMPONENTS.length
+    && custom.every((w) => Number.isInteger(w) && w >= 0 && w <= 5)
+    ? Object.fromEntries(COMPONENTS.map((c, i) => [c.key, custom[i]]))
+    : { ...presets()[Object.hasOwn(presets(), weighting ?? "") ? weighting : data.meta.score.default] };
   return {
     category: Object.keys(CATEGORIES).find((key) => CATEGORIES[key].slug === slug) ?? "cafe",
-    lens: Object.hasOwn(LENSES, lens ?? "") ? lens : "balanced",
+    weights,
     area: Object.hasOwn(AREAS, area ?? "") ? area : "all",
     sqft: sqft >= 50 && sqft <= 5000 ? sqft : data.rent.default_sqft,
     budget: budget >= 1000 ? budget : null,
@@ -266,8 +286,10 @@ function writeHash() {
   if (p.sqft !== data.rent.default_sqft) params.set("sqft", p.sqft);
   if (p.budget) params.set("budget", p.budget);
   if (p.includeLow) params.set("low", "1");
-  const query = params.toString();
-  history.replaceState(null, "", `#${CATEGORIES[p.category].slug}/${p.lens}/${p.area}${query ? `?${query}` : ""}`);
+  const preset = presetOf(p.weights, presets());
+  if (!preset) params.set("w", COMPONENTS.map((c) => p.weights[c.key]).join(","));
+  const query = params.toString().replace(/%2C/g, ",");
+  history.replaceState(null, "", `#${CATEGORIES[p.category].slug}/${preset ?? "custom"}/${p.area}${query ? `?${query}` : ""}`);
 }
 
 if (data) {

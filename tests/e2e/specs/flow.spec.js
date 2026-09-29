@@ -34,13 +34,45 @@ test("the top 5 appear straight away, as five markers none within 30px", async (
   expect(closestPair(await markerCentres(page))).toBeGreaterThanOrEqual(30);
 });
 
-test("each score is its busyness plus its room", async ({ page }) => {
+test("each row states all four parts, and they add up to its score", async ({ page }) => {
   await open(page);
   for (const row of await rows(page).all()) {
-    const [busy, room] = (await row.locator(".pick-why .num").allInnerTexts()).slice(0, 2).map(Number);
+    const partsShown = (await row.locator("[data-part]").allInnerTexts()).map(Number);
+    expect(partsShown).toHaveLength(4);
     const score = Number(await row.locator(".pick-score").innerText());
-    expect(Math.abs(busy + room - score)).toBeLessThanOrEqual(1);
+    expect(partsShown.reduce((a, b) => a + b, 0)).toBe(score);
   }
+});
+
+test("moving a weight re-ranks the list and makes the weights your own", async ({ page }) => {
+  await open(page);
+  const before = await names(page);
+  await page.locator("[data-weight=daytime]").fill("5");
+  await page.locator("[data-weight=room]").fill("0");
+  await expect.poll(() => names(page)).not.toEqual(before);
+  await expect(page.locator(".results-sub")).toContainText("Your own weights");
+  await expect(page).toHaveURL(/#cafe\/custom\/all\?w=1,1,5,0/);
+  await expect(page.locator("[data-share=daytime]")).toHaveText("71%");
+  await page.getByRole("radio", { name: "Balanced" }).click();
+  await expect(page).toHaveURL(/#cafe\/balanced\/all$/);
+});
+
+test("the browser's scores match the pipeline's for every ward", async ({ page }) => {
+  await open(page);
+  const mismatches = await page.evaluate(async () => {
+    const { parts } = await import("/js/score.js");
+    const doc = await fetch("/data/wards.geojson").then((r) => r.json());
+    const weights = doc.meta.score.presets[doc.meta.score.default];
+    const wrong = [];
+    for (const { properties: p } of doc.features) {
+      for (const category of ["cafe", "fast_food"]) {
+        const js = parts(p, category, weights).total;
+        if (Math.abs(js - p.categories[category].score) > 1e-6) wrong.push(`${p.name} ${category}: ${js} vs ${p.categories[category].score}`);
+      }
+    }
+    return wrong;
+  });
+  expect(mismatches).toEqual([]);
 });
 
 test("the priority changes who ranks first", async ({ page }) => {
@@ -63,7 +95,7 @@ test("the area limits the list to that corporation", async ({ page }) => {
 test("the rent budget filters the list, and an empty list offers a fix", async ({ page }) => {
   await open(page);
   await page.locator("#budget").fill("26000");
-  for (const text of await page.locator(".pick-why").allInnerTexts()) expect(rupees(text.split("·").at(-1))).toBeLessThanOrEqual(26000);
+  for (const text of await page.locator(".pick-rent").allInnerTexts()) expect(rupees(text)).toBeLessThanOrEqual(26000);
   await expect(page).toHaveURL(/budget=26000/);
   await page.locator("#budget").fill("5000");
   await expect(page.locator(".empty")).toContainText("No ward's rent fits");
@@ -73,9 +105,9 @@ test("the rent budget filters the list, and an empty list offers a fix", async (
 
 test("the shop size changes the rent", async ({ page }) => {
   await open(page);
-  const before = await page.locator(".pick-why").allInnerTexts();
+  const before = await page.locator(".pick-rent").allInnerTexts();
   await page.locator("#sqft").fill("900");
-  await expect.poll(() => page.locator(".pick-why").allInnerTexts()).not.toEqual(before);
+  await expect.poll(() => page.locator(".pick-rent").allInnerTexts()).not.toEqual(before);
   await expect(page).toHaveURL(/sqft=900/);
 });
 
@@ -88,12 +120,17 @@ test("the URL brings a plan back exactly", async ({ page }) => {
   await expect(page.locator("#budget")).toHaveValue("40000");
 });
 
-test("a row opens the drawer with its score, rent and recommendation", async ({ page }) => {
+test("a row opens the drawer with its score, all four parts, rent and recommendation", async ({ page }) => {
   await open(page);
   const name = (await names(page))[0];
+  const score = Number(await page.locator(".pick-score").first().innerText());
   await rows(page).first().click();
   await expect(page.locator("#drawer-title")).toHaveText(name);
-  await expect(page.locator(".stat").first()).toContainText("/100");
+  await expect(page.locator(".stat").first()).toContainText(`${score}/100`);
+  const points = (await page.locator(".parts-table tbody td:last-child").allInnerTexts()).map(Number);
+  expect(points).toHaveLength(4);
+  expect(points.reduce((a, b) => a + b, 0)).toBe(score);
+  await expect(page.locator(".parts-table tfoot")).toContainText(String(score));
   await expect(page.locator(".stat").nth(1)).toContainText(/₹\d/);
   await expect(page.locator(".verdict")).toHaveText(/\w{3,}/);
   await page.keyboard.press("Escape");

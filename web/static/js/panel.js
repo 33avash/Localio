@@ -1,6 +1,6 @@
 import { EXAMPLES } from "./chat.js";
 import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
-import { AREAS, breakdown, competitionLevel, LENSES, monthlyRent } from "./score.js";
+import { AREAS, COMPONENTS, monthlyRent, parts, PRESET_NAMES, presetOf, roundedParts } from "./score.js";
 
 // The panel has one scrolling body and an optional footer that keeps the
 // chat's input in view. The tabs in the header switch between them.
@@ -27,6 +27,12 @@ export function renderLoadError(element, detail) {
     </div>`;
 }
 
+// "Balanced", or "Your own weights" once a slider has moved off a preset.
+export function weightsName(weights, presets) {
+  const preset = presetOf(weights, presets);
+  return preset ? PRESET_NAMES[preset] : "Your own weights";
+}
+
 // ---- Plan: the inputs, then the top 5 they produce -------------------------
 
 function plan(state, { wards, meta, rent, ranking }) {
@@ -36,9 +42,8 @@ function plan(state, { wards, meta, rent, ranking }) {
     body: `
       <section class="plan" aria-label="Your plan">
         ${choice("Opening a", "category", p.category, Object.fromEntries(Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])))}
-        ${choice("Priority", "lens", p.lens, Object.fromEntries(Object.entries(LENSES).map(([k, v]) => [k, v.name])))}
-        <p class="field-hint">${LENSES[p.lens].describe}</p>
         ${choice("Area", "area", p.area, AREAS)}
+        ${weightsControl(p.weights, meta.score.presets)}
         <div class="field-pair">
           <label class="field"><span class="field-label">Shop size</span>
             <span class="input-unit"><input id="sqft" type="number" inputmode="numeric" min="50" max="5000" step="25"
@@ -55,8 +60,44 @@ function plan(state, { wards, meta, rent, ranking }) {
   };
 }
 
-// Typing a size or budget redraws only this part, so the field being
-// typed in keeps its focus and caret.
+// The four weights as sliders, with the presets as starting points.
+function weightsControl(weights, presets) {
+  const current = presetOf(weights, presets);
+  const buttons = Object.keys(presets).map((name) =>
+    `<button role="radio" aria-checked="${name === current}" data-action="preset" data-value="${name}">${PRESET_NAMES[name]}</button>`);
+  const sum = COMPONENTS.reduce((total, c) => total + weights[c.key], 0);
+  const sliders = COMPONENTS.map((c) => `
+    <label class="weight">
+      <span class="weight-name"><span class="key" style="background:${c.colour}"></span>${c.label}</span>
+      <input type="range" min="0" max="5" step="1" value="${weights[c.key]}" data-weight="${c.key}"
+        aria-describedby="about-${c.key}">
+      <output class="weight-share num" data-share="${c.key}">${share(weights[c.key], sum)}</output>
+      <span class="visually-hidden" id="about-${c.key}">${c.about}</span>
+    </label>`);
+  return `
+    <fieldset class="weights">
+      <legend class="field-label">What matters to you</legend>
+      <div class="segmented" role="radiogroup" aria-label="Start from">${buttons.join("")}</div>
+      <div class="weight-list">${sliders.join("")}</div>
+    </fieldset>`;
+}
+
+function share(weight, sum) {
+  return `${Math.round(sum ? (100 * weight) / sum : 25)}%`;
+}
+
+// Moving a slider updates the shares and the preset buttons in place, so
+// the slider being dragged keeps its focus.
+export function updateWeights(body, weights, presets) {
+  const sum = COMPONENTS.reduce((total, c) => total + weights[c.key], 0);
+  for (const output of body.querySelectorAll("[data-share]")) output.textContent = share(weights[output.dataset.share], sum);
+  const current = presetOf(weights, presets);
+  for (const button of body.querySelectorAll("[data-action=preset]")) {
+    button.setAttribute("aria-checked", String(button.dataset.value === current));
+  }
+}
+
+// Typing a size or budget, or moving a slider, redraws only this part.
 export function renderResults(body, state, data) {
   const section = body.querySelector("#results");
   if (section) section.innerHTML = results(state, data);
@@ -66,8 +107,8 @@ function results(state, { wards, meta, rent, ranking }) {
   const p = state.plan;
   return `
     <h2 id="results-title" tabindex="-1">Top 5 for a ${CATEGORIES[p.category].one}</h2>
-    <p class="results-sub">${LENSES[p.lens].name} · ${AREAS[p.area]} · ${num(ranking.length)} wards fit</p>
-    ${ranking.length ? picks(state, { meta, rent, ranking }) : empty(state, { wards, rent })}`;
+    <p class="results-sub">${weightsName(p.weights, meta.score.presets)} · ${AREAS[p.area]} · ${num(ranking.length)} wards fit</p>
+    ${ranking.length ? picks(state, { rent, ranking }) : empty(state, { wards, rent })}`;
 }
 
 // A row of buttons that behave as radio buttons, for one plan setting.
@@ -82,32 +123,38 @@ function choice(label, key, value, options) {
     </div>`;
 }
 
-// Each row splits its score into busyness and low-competition points, so
-// the ranking explains itself.
-function picks(state, { meta, rent, ranking }) {
-  const { category, lens, sqft } = state.plan;
-  const c = CATEGORIES[category];
+// A bar of the score's four parts, each as wide as its points.
+export function partsBar(items) {
+  return `<span class="bar4" aria-hidden="true">${items.map((item) =>
+    `<span style="width:${item.points.toFixed(1)}%; background:${item.colour}"></span>`).join("")}</span>`;
+}
+
+// Every row states all four parts of its score, so the ranking explains
+// itself; the rent is for the shop size typed above.
+function picks(state, { rent, ranking }) {
+  const { category, weights, sqft } = state.plan;
   const rows = ranking.slice(0, 5).map(({ feature, score }, i) => {
     const p = feature.properties;
-    const part = breakdown(p, category, lens);
-    const level = competitionLevel(p, category, meta.city.per_10k[category]);
+    const { items } = parts(p, category, weights);
+    const points = roundedParts(items);
     return `
       <li><button class="pick" data-action="pick" data-value="${i}" data-name="${escapeHtml(p.name)}">
         <span class="pick-rank num">${i + 1}</span>
         <span class="pick-main">
-          <span class="pick-name">${escapeHtml(p.name)}${p.status === "scored" ? "" : ' <span class="low-flag">few outlets</span>'}</span>
-          <span class="split" aria-hidden="true"><span class="split-busy" style="width:${part.busy.toFixed(1)}%"></span><span
-            class="split-room" style="width:${part.room.toFixed(1)}%"></span></span>
-          <span class="pick-why">${num(Math.round(part.busy))} busy + ${num(Math.round(part.room))} room ·
-            ${num(p.categories[category].count)} ${c.many}, ${level} competition · ${num(rupees(monthlyRent(rent, p, sqft)))} rent</span>
+          <span class="pick-head"><span class="pick-name">${escapeHtml(p.name)}${p.status === "scored" ? ""
+            : ' <span class="low-flag">few outlets</span>'}</span>
+            <span class="pick-rent num">${rupees(monthlyRent(rent, p, sqft))}/mo</span></span>
+          ${partsBar(items)}
+          <span class="pick-parts">${items.map((item, j) =>
+            `<span><span class="num" data-part="${item.key}">${points[j]}</span> ${item.label.toLowerCase()}</span>`).join("")}</span>
         </span>
         <span class="pick-score num" data-score="${score}">${Math.round(score)}</span>
       </button></li>`;
   });
   return `
     <ol class="picks">${rows.join("")}</ol>
-    <p class="note"><span class="key key-busy"></span>Busyness and <span class="key key-room"></span>low competition add up
-      to each score out of 100. Click a ward for the details.</p>`;
+    <p class="note">Each score is its four parts added up. Move the sliders to change how much each counts; click a
+      ward for the details.</p>`;
 }
 
 // Says what emptied the list, and offers the smallest change that fixes it.
@@ -140,7 +187,7 @@ function list({ kind, list: lines }) {
   return `<${tag} class="msg-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</${tag}>`;
 }
 
-function ask(state, { conversation }) {
+function ask(state, { conversation, meta }) {
   const { messages, draft } = conversation;
   const p = state.plan;
   const items = messages.map((m, i) => (m.role === "user"
@@ -154,20 +201,20 @@ function ask(state, { conversation }) {
       </li>`));
   const intro = messages.length ? "" : `
     <h2 tabindex="-1">Ask about any ward</h2>
-    <p class="lede">Answers come only from Localio's data. Mention a format, area, budget or shop size and I'll use
-      it.</p>
+    <p class="lede">Answers come only from Localio's data, using your plan. Mention a format, area, budget or shop size
+      and I'll use it.</p>
     <div class="suggestions">${EXAMPLES.map((q) =>
       `<button class="chip" data-action="ask" data-value="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}</div>`;
   return {
     body: `
-      <p class="chat-context">Your plan: ${CATEGORIES[p.category].label} · ${LENSES[p.lens].name} · ${AREAS[p.area]} ·
-        ${num(p.sqft)} sq ft${p.budget ? ` · rent up to ${num(rupees(p.budget))}` : ""}</p>
+      <p class="chat-context">Your plan: ${CATEGORIES[p.category].label} · ${weightsName(p.weights, meta.score.presets)} ·
+        ${AREAS[p.area]} · ${num(p.sqft)} sq ft${p.budget ? ` · rent up to ${num(rupees(p.budget))}` : ""}</p>
       ${intro}
       <ol class="messages" aria-live="polite" aria-label="Conversation">${items.join("")}</ol>`,
     foot: `
       <form class="ask-form" data-form="ask">
         <label class="visually-hidden" for="ask-input">Your question</label>
-        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Tell me about Baner">${escapeHtml(draft)}</textarea>
+        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Why is #1 ranked first?">${escapeHtml(draft)}</textarea>
         <button class="primary" type="submit">Send</button>
       </form>`,
   };
