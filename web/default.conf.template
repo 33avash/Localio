@@ -23,10 +23,11 @@ server {
     }
 
     # Filled in from the environment when the container starts. An empty
-    # key makes the page fall back to OpenStreetMap tiles.
+    # CARTO key means OpenStreetMap tiles; an empty Gemini key means the
+    # chat's built-in answers.
     location = /config.json {
         default_type application/json;
         add_header Cache-Control "no-store";
-        return 200 '{"cartoKey": "${LOCALIO_CARTO_KEY}"}';
+        return 200 '{"cartoKey": "${LOCALIO_CARTO_KEY}", "geminiKey": "${GEMINI_API_KEY}"}';
     }
 }

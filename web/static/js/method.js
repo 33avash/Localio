@@ -64,10 +64,12 @@ export function methodHtml({ meta, wards, rent }) {
 
     <section class="drawer-section">
       <h3>4. The chat</h3>
-      <p>The chat runs in your browser on the same data as the map. It reads the format, area, budget, shop size and
-        what matters to you ("near offices", "low competition") from your question, answers with the four parts above,
-        and names the wards it used, so every answer can be checked on the map. There's no language model: anything
-        that isn't about opening a cafe or QSR in Pune is refused, not guessed.</p>
+      <p>Localio's own engine reads your question (the wards it names, and any format, area, budget, shop size or
+        priority such as "near offices") and computes the answer from the same data as the map. Google Gemini then
+        writes the reply from those facts only: your plan, how the score works, the top 5 and a card for each ward in
+        question. It must name the wards it used, which are checked against the data, and it declines anything that
+        isn't about opening a cafe or QSR in Pune. If Gemini isn't available, you get the built-in answer, marked as
+        such.</p>
     </section>
 
     <section class="drawer-section">

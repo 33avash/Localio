@@ -56,6 +56,15 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 ## Chat
 
+**Gemini writes, Localio decides.** Localio's engine parses each question and computes the answer from the ward data; Gemini only turns those facts into a reply. It never sees anything but the facts for that question, so it can't bring in outside claims about Pune, and every ward it names is checked against the data. This keeps the answers as accurate as the map while reading like a conversation.
+
+**Facts for the plan the question implies.** "Rent there for 400 sq ft" gets cards computed at 400 sq ft, not 300, so Gemini quotes a figure from the data instead of scaling one itself (it once said ₹41,333 where the data says ₹40,700).
+
+**Called from the browser, with a fast model first.** The site is static on GitHub Pages, so there's no server to hold the key; the browser calls Gemini directly. `gemini-3.5-flash-lite` answers in about 1.5 seconds; `gemini-3.5-flash` takes over when it's busy. The key is therefore public, so it's a free-tier key restricted to the site's address, with a limit of 8 questions a minute per visitor.
+
+**Always a fallback.** No key, a busy model or a reply that fails its checks means the built-in answer, labelled as such. Tests never call the real Gemini: they mock it, to check what it's sent, what's shown, and the fallback.
+
+
 **In the browser, from the same files.** The chat reads the ward data the map uses, so the two can't disagree; a test checks the chat's top 5 equals the map's for every plan it's asked about. It needs no server, which is what lets the published site be a static page.
 
 **Rules, not a language model.** It finds ward names (official titles and the places inside each ward), reads format, area, budget, size and what matters ("near offices", "low competition") from the question, and picks one of a few answer types: a ward, a comparison, why a ward ranks where it does, rent, a ranking, gaps, or the method. A model would sound more fluent but could state numbers the data doesn't hold; this can't.

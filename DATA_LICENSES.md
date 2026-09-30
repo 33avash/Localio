@@ -14,6 +14,7 @@ Localio's code is MIT licensed (see [LICENSE](LICENSE)). The data and tools it u
 | [Square Yards shop listings](https://www.squareyards.com/rent/shops-for-rent-in-pune) (`seed_data/rent_listings.csv`) | 25 asking rents, for the typical rent | Published figures, cited with their source. Not covered by the MIT licence. |
 | [DineOpen](https://www.dineopen.com/blog/restaurant-profit-margins-india-guide.html) (`seed_data/rent_benchmarks.csv`) | shop size and healthy rent share | Published figures, cited with their source. |
 | CARTO basemaps (optional) | quieter tiles when a key is set | [CARTO basemap terms](https://carto.com/basemaps) |
+| Google Gemini API | writing the chat's replies from Localio's facts, when a key is set | [Gemini API terms](https://ai.google.dev/gemini-api/terms). On the free tier, Google may use prompts and replies to improve its products; Localio sends only the question and public ward figures. |
 
 Earlier versions used a table of 260 outlets from the Google Places API. Google's terms restrict storing and redistributing Places content, so it was removed from the repository and from its history.
 

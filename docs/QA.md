@@ -24,6 +24,8 @@
 - [ ] Esc closes the drawer, and focus returns to what opened it.
 
 ## 4. Chat
+- [ ] With a Gemini key set, answers say "Written by Gemini from Localio's data"; the typing dots show while it writes.
+- [ ] A follow-up ("and the rent there?") answers about the ward just discussed.
 - [ ] "Why is #1 ranked first?" explains the current #1 part by part.
 - [ ] "Cafes near offices" turns the daytime weight up and offers the plan.
 - [ ] "Compare Baner and Aundh" compares them for your format.

@@ -26,12 +26,15 @@ flowchart LR
         site["plan, map, drawer<br/>and chat, in the browser"]
     end
 
+    gemini(["Google Gemini<br/>writes chat replies from<br/>the facts it's given"])
+
     seed --> load
     load <--> pg
     check -- "all ok" --> files
     check -- "any fail: exit 1" --> stop(["nothing written,<br/>web never starts"])
     files -- "read-only" --> web
     web --> browser(["browser"])
+    browser -. "question + facts" .-> gemini
 ```
 
 ## Containers
@@ -49,7 +52,7 @@ flowchart LR
 - **Start order.** `data` waits for `db` to be healthy; `web` waits for `data` to finish successfully. A failed check means the site never shows bad numbers.
 - **No stale state.** The database uses tmpfs, `./output` is a bind mount rather than a named volume, and nginx serves `/data/` with `Cache-Control: no-store`. Every run shows that run's numbers.
 - **Atomic writes.** The pipeline writes each file to a `.tmp` sibling and then renames it, so nginx never serves half a file.
-- **The browser does the interactive work.** The pipeline ships each ward's four score parts, the presets and its rent tier, so changing the plan or any weight re-ranks instantly, and the chat answers from the same files with no server.
+- **The browser does the interactive work.** The pipeline ships each ward's four score parts, the presets and its rent tier, so changing the plan or any weight re-ranks instantly, and the chat answers from the same files. For the chat's wording, the browser sends Gemini the question and the facts Localio computed for it; the key comes from `config.json`, written by nginx from `.env` locally and by the Pages workflow from a repository secret.
 - **Offline by default.** Seed data, Leaflet and the fonts are committed. The only runtime network use is map tiles, and the map still works without them.
 
 ## Publishing

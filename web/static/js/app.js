@@ -1,4 +1,5 @@
 import { reply, wardIndex } from "./chat.js";
+import { askGemini } from "./llm.js";
 import { drawerHtml } from "./drawer.js";
 import { CATEGORIES } from "./format.js";
 import { createMap } from "./map.js";
@@ -26,8 +27,8 @@ async function getJson(url) {
   return response.json();
 }
 
-// The key is optional (and absent on the published site), so a missing
-// config just means OpenStreetMap tiles.
+// Both keys are optional: without a CARTO key the map uses OpenStreetMap
+// tiles, and without a Gemini key the chat uses its built-in answers.
 const config = await getJson("config.json").catch(() => ({}));
 const map = createMap(document.getElementById("map"), {
   cartoKey: config.cartoKey,
@@ -54,7 +55,7 @@ const data = await loadData();
 const state = {
   tab: "plan",
   plan: data ? readHash() : null,
-  conversation: { messages: [], draft: "", last: [] },
+  conversation: { messages: [], draft: "", last: [], pending: false, ai: Boolean(config.geminiKey) },
 };
 let shown = new Map();
 let returnFocus = null;
@@ -206,20 +207,38 @@ function wireRows() {
   if (rows.length) shown = new Map(rows.map((row) => [row.dataset.name, Number(row.querySelector(".pick-score").dataset.score)]));
 }
 
-// The chat answers in the browser from the same data and plan as the map.
-function send(text) {
+// The chat: the built-in engine works out the question and its answer from
+// the same data and plan as the map; with a Gemini key, Gemini words the
+// reply from those facts. Either way the reply names the wards it used.
+async function send(text) {
   const question = text.trim();
-  if (!question) return;
   const { conversation } = state;
-  const answer = reply(question, { ...data, plan: state.plan, ranking: ranking(), last: conversation.last });
+  if (!question || conversation.pending) return;
+  const context = { ...data, plan: state.plan, ranking: ranking(), last: conversation.last };
+  const builtIn = reply(question, context);
+  const history = conversation.messages.map((m) => ({ role: m.role, text: m.text }));
   conversation.messages.push({ role: "user", text: question });
+  conversation.draft = "";
+  conversation.pending = conversation.ai;
+  state.tab = "ask";
+  showChat();
+
+  const ai = conversation.ai ? await askGemini(question, context, builtIn, { key: config.geminiKey, history }) : null;
+  const answer = ai
+    ? { kind: ai.wards.length || builtIn.kind !== "refuse" ? "ai" : "refuse", text: ai.answer, wards: ai.wards,
+      plan: builtIn.plan, source: "gemini" }
+    : { ...builtIn, source: conversation.ai ? "fallback" : "built-in" };
   conversation.messages.push({ role: "answer", ...answer, wards: answer.wards.map((w) => w.properties.name) });
   if (answer.wards.length) conversation.last = answer.wards;
-  conversation.draft = "";
-  state.tab = "ask";
+  conversation.pending = false;
+  showChat();
+  document.getElementById("ask-input")?.focus();
+}
+
+function showChat() {
+  if (state.tab !== "ask") return;
   render();
   regions.body.scrollTop = regions.body.scrollHeight;
-  document.getElementById("ask-input")?.focus();
 }
 
 function openWard(name, { fly = false } = {}) {
