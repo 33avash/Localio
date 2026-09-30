@@ -2,7 +2,7 @@
 
 **Where in Pune should I open a cafe or a QSR?**
 
-Localio scores all 140 of Pune's wards on four things: how many people live there, how much they already eat out, what draws people in by day, and how many places like yours are there already. You decide how much each matters. The map shows the best five wards, the rent to expect, and every part of each score. A chat answers questions from the same data.
+Localio scores all 140 of Pune's wards on four things: how many people live there, how much they already eat out, what draws people in by day, and how many places like yours are there already. You decide how much each matters. The map shows the best five wards, the rent to expect, and every part of each score. A chatbot, powered by Google Gemini, answers questions from the same data.
 
 **Try it:** https://33avash.github.io/Localio/
 
@@ -11,7 +11,7 @@ Localio scores all 140 of Pune's wards on four things: how many people live ther
 ## Use it
 
 - **Plan.** Pick a format and an area, set how much each of the four parts matters (or start from a preset), and type a shop size and a rent budget. The top 5 update as you go, and every row shows its four parts. Click a ward for the full breakdown.
-- **Ask.** Questions like *"Why is #1 ranked first?"*, *"Compare Baner and Aundh"* or *"Cafes in PCMC under ₹30k rent"*. Answers use only Localio's data, name the wards they rely on, and can set your plan on the map. Anything off-topic is refused.
+- **Ask.** Questions like *"Why is #1 ranked first?"*, *"Compare Baner and Aundh"* or *"Best spot near colleges under ₹35k rent?"*. Gemini answers from Localio's data only, names the wards it relied on (click one to open it), follows up on earlier questions, and can set your plan on the map. Anything off-topic is refused.
 - **Share.** The URL holds your plan (for example `#qsr/busy/pcmc?budget=40000`, or `#cafe/custom/all?w=1,1,5,3` for weights of your own), so a link opens the same shortlist.
 
 ## How a ward is scored
@@ -41,6 +41,17 @@ Wards with fewer than 10 outlets mapped are scored but kept off the top 5 unless
 
 **Rent** = typical Pune shop rent (₹137.5 per sq ft a month, the median of 25 listings) × the ward's tier (0.6× to 1.68×, from Cushman & Wakefield's published high-street rents) × your shop size. Localio doesn't forecast sales or profit; there's no open data to do that honestly.
 
+## The chatbot
+
+The Ask tab is a Gemini chatbot grounded in Localio's data:
+
+1. Localio's own engine reads the question: the wards it names, and any format, area, budget, shop size or priority ("near offices", "low competition").
+2. It computes the answer from the ward data, exactly as the map does, and gathers the facts: your plan, how the score works, the top 5 for the plan the question implies, and a full card for each ward in question.
+3. Gemini (`gemini-3.5-flash-lite`, falling back to `gemini-3.5-flash`) writes the reply from those facts only, under rules not to invent numbers or places and to decline anything off-topic. It returns the wards it used, which are checked against the data.
+4. If there's no key, Gemini is busy, or its reply doesn't check out, the chat shows the built-in answer instead.
+
+The browser calls Gemini directly, so on the published site the key is readable in the page. Use a free-tier key (no billing, so misuse can only use up its quota), and restrict it to the site: in [Google Cloud's credentials page](https://console.cloud.google.com/apis/credentials), open the key, set **Application restrictions → Websites** to `https://33avash.github.io/*` (and `http://localhost:8080/*` for local use), and **API restrictions** to the Generative Language API.
+
 ## Run it yourself
 
 You need Docker with Compose v2.
@@ -51,7 +62,9 @@ cd Localio
 docker compose up --build
 ```
 
-Open **http://localhost:8080** once the `data` container has finished (about a minute the first time). No keys or accounts are needed. Stop it with `docker compose down`.
+Open **http://localhost:8080** once the `data` container has finished (about a minute the first time). Stop it with `docker compose down`.
+
+Everything works without keys; the chat then uses its built-in answers. For Gemini's answers, get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (no card needed), copy `.env.example` to `.env`, and set `GEMINI_API_KEY=`. `LOCALIO_CARTO_KEY` (quieter basemap) and `LOCALIO_PORT` (if 8080 is taken) are optional too.
 
 ## How it's built
 
@@ -63,7 +76,7 @@ db (PostGIS) ──▶ data (Python pipeline, runs once) ──▶ ./output ─�
 
 - **db**: a throwaway PostGIS database. The pipeline uses it to place every outlet in its ward by boundary (`ST_Contains`).
 - **data**: reads `seed_data/`, scores every ward, runs its checks, and writes `wards.geojson`, `pois.geojson` and `rent.json`. If any check fails it writes nothing and the site doesn't start.
-- **web**: nginx serves the map (Leaflet, plain JavaScript) and the pipeline's output. The chat runs in the browser on the same files.
+- **web**: nginx serves the map (Leaflet, plain JavaScript) and the pipeline's output. The chat runs in the browser on the same files, and calls Gemini when a key is set.
 
 GitHub Actions runs the same pipeline containers to publish the site to GitHub Pages on every push to `main`, and runs every test on every pull request. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full picture.
 
@@ -116,7 +129,7 @@ all checks passed
 - **Residents are 2011 figures** on 2012 wards. Pune has grown since, especially at its edges.
 - **Rent is a guide, not a quote.** Tiers come from ten published streets; the other wards are estimated from their zone.
 - **The score compares wards.** It says where to look first, not what a shop will earn.
-- **The chat is rule-based.** It understands the questions it was built and tested for; for anything else it says what it can answer rather than guess.
+- **The chatbot words, it doesn't know.** Gemini only sees the facts Localio hands it for each question; if they don't cover something, it says so. When Gemini is busy or unreachable, the chat falls back to its built-in answers and says so.
 
 ## More
 
