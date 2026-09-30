@@ -1,6 +1,6 @@
 # Licences
 
-Localio's code is MIT licensed (see [LICENSE](LICENSE)). The data and tools it uses come under their own terms, listed here.
+Localio's code is MIT licensed (see [LICENSE](../LICENSE)). The data and tools it uses come under their own terms, listed here.
 
 ## Data
 

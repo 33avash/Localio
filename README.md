@@ -1,56 +1,75 @@
 # Localio
 
-**Where in Pune should I open a cafe or a QSR?**
+**Shortlist where to open a cafe or a QSR in Pune.**
 
-Localio scores all 140 of Pune's wards on four things: how many people live there, how much they already eat out, what draws people in by day, and how many places like yours are there already. You decide how much each matters. The map shows the best five wards, the rent to expect, and every part of each score. A chatbot, powered by Google Gemini, answers questions from the same data.
+Picking a neighbourhood comes before picking a shop, and it's usually done on gut feel. Localio makes that first cut with data. Describe what you're opening, who your customers are and what rent you can pay. It ranks all 140 of Pune's wards, estimates the rent in each, and shows exactly why each ward scores what it does. You end up with a short list of areas worth visiting.
 
 **Try it:** https://33avash.github.io/Localio/
 
-![Localio: a plan on the left (cafe, balanced, all of Pune, 300 sq ft) with the top 5 wards and their scores, and the wards of Pune shaded by cafes per 10,000 residents on the map](docs/screenshot.png)
+![Localio: the brief on the left (cafe, a mix of customers, some competition, all of Pune, 300 sq ft) above the top 5 wards, with the map coloured by each ward's score](docs/screenshot.png)
 
-## Use it
+## Who it's for
 
-- **Plan.** Pick a format and an area, set how much each of the four parts matters (or start from a preset), and type a shop size and a rent budget. The top 5 update as you go, and every row shows its four parts. Click a ward for the full breakdown.
-- **Ask.** Questions like *"Why is #1 ranked first?"*, *"Compare Baner and Aundh"* or *"Best spot near colleges under ₹35k rent?"*. Gemini answers from Localio's data only, names the wards it relied on (click one to open it), follows up on earlier questions, and can set your plan on the map. Anything off-topic is refused.
-- **Share.** The URL holds your plan (for example `#qsr/busy/pcmc?budget=40000`, or `#cafe/custom/all?w=1,1,5,3` for weights of your own), so a link opens the same shortlist.
+Anyone doing a first-cut site search for a small food business in Pune, such as a founder planning a first cafe or a chain looking at its next outlet. It answers "where should I look?", not "will this shop make money?".
+
+## A walkthrough
+
+Say you're opening a **300 sq ft coffee bar for students and office workers**, you'd rather not sit next to other cafes, and you can pay **₹35,000 a month** in rent.
+
+1. **Answer the four questions:** Cafe · Office workers and students · Avoid competition · All of Pune, 300 sq ft, ₹35,000.
+2. **Read the shortlist.** Katraj Dairy comes first (79/100): 4 colleges, 8 stations and only 2 cafes mapped, at about ₹31k a month. Pune University (77) and Janwadi-Gokhalenagar (76) would make the top 5 but drop out on rent (₹49k and ₹69k). The map turns green where a ward fits and grey where your brief rules it out.
+3. **Compare** the top 3 side by side: score, each part of it, rent, the sales you'd need, residents, competition.
+4. **Ask** in plain words: *"Why is Katraj Dairy first?"*, *"Compare Baner and Aundh"*, *"Rent there for 400 sq ft?"*. Answers come from the same data, and every ward they name opens on the map.
+5. **Share** the link. It holds the whole brief (`#cafe?for=offices&competition=avoid&budget=35000`), so it opens the same shortlist anywhere.
+
+Then go and visit. See [the limits](#limits) for why.
 
 ## How a ward is scored
 
 Four parts, each from 0 to 1:
 
-| Part | What it measures | How |
+| Part | Asks | Measured as |
 |---|---|---|
-| **Residents** | where people live | the ward's standing among Pune's 140 wards on residents per km² (0.8 = higher than 80% of them) |
-| **Eating out** | where people already go out | its standing on food and drink places per km², of every kind |
-| **Daytime draw** | what brings people in by day | its standing on offices, colleges and stations per km² |
-| **Low competition** | how crowded your format is | `1 − x / (x + r)`: x is your format's outlets per 10,000 residents (plus one, since OpenStreetMap misses outlets), r the same rate in the 40 well-mapped wards (2.49 cafes, 2.34 QSRs). It's 0.5 at that rate. |
+| **Residents** | Do many people live here? | the ward's standing among the 140 on residents per km² (0.8 = higher than 80% of wards) |
+| **Eating out** | Do people already go out to eat here? | its standing on food and drink places per km² |
+| **Daytime draw** | Does anything bring people in by day? | its standing on offices, colleges and stations per km² |
+| **Low competition** | How crowded is your format already? | `1 − x / (x + r)`: x is your format's outlets per 10,000 residents (plus one, since OpenStreetMap misses outlets), r the rate in the 40 well-mapped wards (2.49 cafes, 2.34 QSRs). 0.5 at that rate. |
 
 ```
 score = 100 × Σ(weight × part) / Σ(weights)
 ```
 
-So each part adds `100 × its share of the weight × its value` points, and the four points add up to the score. You set each weight from 0 to 5; the presets are starting points:
+Your answers set the weights:
 
-| Preset | Residents | Eating out | Daytime draw | Low competition |
-|---|---|---|---|---|
-| Balanced | 1 | 1 | 1 | 3 |
-| Busy areas | 3 | 3 | 3 | 2 |
-| Low competition | 1 | 1 | 1 | 5 |
+| Who are your customers? | Residents | Eating out | Daytime draw |
+|---|---|---|---|
+| A mix of everyone | 1 | 1 | 1 |
+| People who live nearby | 3 | 0 | 0 |
+| Office workers and students | 0 | 0 | 3 |
+| People out to eat | 0 | 3 | 0 |
 
-Wards with fewer than 10 outlets mapped are scored but kept off the top 5 unless you include them: that few usually means thin mapping, not an empty market. The pipeline scores from exactly the numbers it publishes, and a test checks the browser reproduces every score.
+| How much competition can you take? | Low competition |
+|---|---|
+| Avoid it | 5 |
+| Some is fine | 3 |
+| Don't mind | 1 |
 
-**Rent** = typical Pune shop rent (₹137.5 per sq ft a month, the median of 25 listings) × the ward's tier (0.6× to 1.68×, from Cushman & Wakefield's published high-street rents) × your shop size. Localio doesn't forecast sales or profit; there's no open data to do that honestly.
+With "some is fine", the people side and the competition side count half each. Every weight can be fine-tuned (0–5) with sliders. Each row on the site shows the points from each part, and they add up to the score.
 
-## The chatbot
+**Rent** = typical Pune shop rent (₹137.5 per sq ft a month, the median of 25 listings) × the ward's tier (0.6× to 1.68×, from Cushman & Wakefield's high-street rents) × your shop size. Localio also shows the monthly sales that would keep rent at a healthy 8–15%.
 
-The Ask tab is a Gemini chatbot grounded in Localio's data:
+Wards with fewer than 10 outlets mapped are scored but left off the shortlist unless you include them: that few usually means thin mapping, not an empty market.
 
-1. Localio's own engine reads the question: the wards it names, and any format, area, budget, shop size or priority ("near offices", "low competition").
-2. It computes the answer from the ward data, exactly as the map does, and gathers the facts: your plan, how the score works, the top 5 for the plan the question implies, and a full card for each ward in question.
-3. Gemini (`gemini-3.5-flash-lite`, falling back to `gemini-3.5-flash`) writes the reply from those facts only, under rules not to invent numbers or places and to decline anything off-topic. It returns the wards it used, which are checked against the data.
-4. If there's no key, Gemini is busy, or its reply doesn't check out, the chat shows the built-in answer instead.
+## Limits
 
-The browser calls Gemini directly, so on the published site the key is readable in the page. Use a free-tier key (no billing, so misuse can only use up its quota), and restrict it to the site: in [Google Cloud's credentials page](https://console.cloud.google.com/apis/credentials), open the key, set **Application restrictions → Websites** to `https://33avash.github.io/*` (and `http://localhost:8080/*` for local use), and **API restrictions** to the Generative Language API.
+The site states these under every shortlist, too.
+
+- **Visit first.** The score compares wards from data. It can't see the street, the shop or the footfall at your hours.
+- **Outlets are undercounted.** They come from OpenStreetMap, which misses places, most of all in Pimpri-Chinchwad. "No cafes" can mean "none mapped yet".
+- **Residents are 2011 figures** on 2012 wards. Newer areas at the city's edge have grown since.
+- **Rent is an estimate**, not a quote. Tiers come from ten published streets; other wards are estimated from their zone.
+- **No sales forecast.** There's no open data to predict what a shop will earn, so Localio doesn't try.
+- **The chat can misread a question.** Its facts come from the data, but check any ward it names by opening it.
 
 ## Run it yourself
 
@@ -64,33 +83,35 @@ docker compose up --build
 
 Open **http://localhost:8080** once the `data` container has finished (about a minute the first time). Stop it with `docker compose down`.
 
-Everything works without keys; the chat then uses its built-in answers. For Gemini's answers, get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (no card needed), copy `.env.example` to `.env`, and set `GEMINI_API_KEY=`. `LOCALIO_CARTO_KEY` (quieter basemap) and `LOCALIO_PORT` (if 8080 is taken) are optional too.
+No keys are needed. Two are optional, set in a `.env` copied from `.env.example`:
+
+- `GEMINI_API_KEY`: a free [Google AI Studio](https://aistudio.google.com/apikey) key. With it, the chat's replies are worded by an AI model (Gemini) from Localio's facts; without it, the chat gives its own rule-based answers.
+- `LOCALIO_CARTO_KEY` gives a quieter basemap. `LOCALIO_PORT` changes the port if 8080 is taken.
 
 ## How it's built
 
-Three containers, started in order by Docker Compose:
-
 ```
-db (PostGIS) ──▶ data (Python pipeline, runs once) ──▶ ./output ──▶ web (nginx: map + chat)
+db (PostGIS) ──▶ data (Python pipeline, runs once) ──▶ ./output ──▶ web (nginx: map, shortlist, chat)
 ```
 
-- **db**: a throwaway PostGIS database. The pipeline uses it to place every outlet in its ward by boundary (`ST_Contains`).
-- **data**: reads `seed_data/`, scores every ward, runs its checks, and writes `wards.geojson`, `pois.geojson` and `rent.json`. If any check fails it writes nothing and the site doesn't start.
-- **web**: nginx serves the map (Leaflet, plain JavaScript) and the pipeline's output. The chat runs in the browser on the same files, and calls Gemini when a key is set.
+- **db** is a throwaway PostGIS database. The pipeline uses it to place every outlet in its ward by boundary (`ST_Contains`).
+- **data** reads `seed_data/`, scores every ward, runs its checks, and writes `wards.geojson`, `pois.geojson` and `rent.json`. If any check fails, it writes nothing and the site doesn't start.
+- **web** is nginx serving the site (Leaflet and plain JavaScript modules, no build step) and the pipeline's output. Scoring, ranking and comparing happen in the browser, from the same numbers the pipeline wrote.
 
-GitHub Actions runs the same pipeline containers to publish the site to GitHub Pages on every push to `main`, and runs every test on every pull request. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full picture.
+**The chat** is grounded in the data. Localio's own engine reads the question (the wards it names, the format, area, budget, size, customers) and works out the answer from the ward data. The AI model then only words the reply from those facts. The wards it names are checked against the data, it declines anything off-topic, and if it fails, the engine's own answer is shown. The key is readable in the published page, so restrict it to the site's address in Google Cloud (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-chat)).
+
+GitHub Actions runs every test on each pull request, and on each push to `main` runs the same pipeline container to publish the site to GitHub Pages.
 
 ### Repository layout
 
 ```
-data/        the pipeline (Python) and its tests
-web/         the site: HTML, CSS, JavaScript (map, plan, drawer, chat), served by nginx
-tests/e2e/   browser tests (Playwright): the flow, the chat's labelled questions, visuals
-tools/geo/   one-off tools that rebuild seed_data/ from the internet
-seed_data/   every input, committed, so a build never needs the network
-scripts/     verify.sh: clean start to all tests in one command
-docs/        architecture, the manual QA checklist, the screenshot
-.github/     checks on every pull request; publishing to GitHub Pages
+data/          the pipeline (Python) and its unit tests
+web/           the site: HTML, CSS, JavaScript modules, served by nginx
+tests/e2e/     browser tests (Playwright)
+seed_data/     every input, committed, so a build never needs the network
+tools/geo/     one-off tools that rebuild seed_data/ from the internet
+scripts/       verify.sh: a clean start through every test
+docs/          architecture, design decisions, licences, the manual QA list
 ```
 
 ## Check it works
@@ -99,7 +120,7 @@ docs/        architecture, the manual QA checklist, the screenshot
 make verify        # or: bash scripts/verify.sh
 ```
 
-It tears everything down, rebuilds, and runs the pipeline's checks, its unit tests and the browser tests, then prints a summary:
+It tears everything down, rebuilds, runs the pipeline's checks, its 34 unit tests and 45 browser tests, and prints a summary:
 
 ```
 localio verify
@@ -117,23 +138,15 @@ all checks passed
 |---|---|---|
 | 140 ward boundaries (2012) | [DataMeet](https://github.com/datameet/Pune_wards) | CC BY-SA 2.5 IN |
 | Residents per ward | Census 2011 totals, shared by 2012 voter rolls (PMC) or equally (PCMC) | Government Open Data Licence |
-| 1,702 food and drink outlets in the wards; offices, colleges, stations | [OpenStreetMap](https://www.openstreetmap.org), via Overpass | ODbL |
+| 1,702 food and drink outlets; offices, colleges, stations | [OpenStreetMap](https://www.openstreetmap.org), via Overpass | ODbL |
 | High-street rents | [Cushman & Wakefield](https://www.cushmanwakefield.com/en/india/insights/pune-marketbeat), Q2 2026 | cited figures |
 | Shop listings | [Square Yards](https://www.squareyards.com/rent/shops-for-rent-in-pune), 25 listings | cited figures |
 
-[DATA_LICENSES.md](DATA_LICENSES.md) lists every source and tool with its terms. The code is MIT licensed.
-
-## Limits
-
-- **OpenStreetMap misses outlets**, most of all in Pimpri-Chinchwad, so "no cafes" can mean "none mapped yet". Check on the ground.
-- **Residents are 2011 figures** on 2012 wards. Pune has grown since, especially at its edges.
-- **Rent is a guide, not a quote.** Tiers come from ten published streets; the other wards are estimated from their zone.
-- **The score compares wards.** It says where to look first, not what a shop will earn.
-- **The chatbot words, it doesn't know.** Gemini only sees the facts Localio hands it for each question; if they don't cover something, it says so. When Gemini is busy or unreachable, the chat falls back to its built-in answers and says so.
+[docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) lists every source and tool with its terms. The code is MIT licensed.
 
 ## More
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the containers, the pipeline's checks, and publishing
-- [DECISIONS.md](DECISIONS.md): the main design choices and why
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the containers, the pipeline's checks, the chat, publishing
+- [docs/DECISIONS.md](docs/DECISIONS.md): the main design choices and why
 - [docs/QA.md](docs/QA.md): what to check by hand before a demo
 - [seed_data/SOURCES.md](seed_data/SOURCES.md): every input and how to refresh it
