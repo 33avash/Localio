@@ -390,7 +390,7 @@ h2:focus { outline: none; }
 }
 
 .swatch.top-pick {
-  background: var(--accent-strong);
+  background: var(--bg);
   border: 1.5px solid #FFFFFF;
   border-radius: 50%;
 }
@@ -402,7 +402,7 @@ h2:focus { outline: none; }
   place-items: center;
   width: 100%;
   height: 100%;
-  background: var(--accent-strong);
+  background: var(--bg);
   color: #FFFFFF;
   border: 2px solid #FFFFFF;
   border-radius: 50%;
@@ -423,7 +423,7 @@ h2:focus { outline: none; }
 .pick-marker:focus-visible { outline: none; }
 
 .pick-marker:focus-visible .pick-dot {
-  outline: 2px solid var(--accent-strong);
+  outline: 2px solid var(--bg);
   outline-offset: 2px;
 }
 
@@ -895,14 +895,6 @@ h2:focus { outline: none; }
 
 /* ---- Plan: the inputs ---- */
 
-.plan {
-  display: grid;
-  gap: 14px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
-}
-
-.field-row,
 .field {
   display: grid;
   gap: 6px;
@@ -1107,20 +1099,7 @@ h2:focus { outline: none; }
   font-size: 13px;
 }
 
-/* ---- What matters to you: four weights ---- */
-
-.weights {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.weights legend {
-  margin-bottom: 6px;
-  padding: 0;
-}
+/* ---- Fine-tune: four weights ---- */
 
 .weight-list {
   display: grid;
@@ -1235,13 +1214,7 @@ h2:focus { outline: none; }
 
 .stat .bar4 { margin: 2px 0; }
 
-/* ---- Chat: where an answer came from, and the dots while Gemini writes ---- */
-
-.msg-note {
-  margin-top: 6px !important;
-  color: var(--muted);
-  font-size: 12px;
-}
+/* ---- Chat: the dots while an answer is written ---- */
 
 .typing {
   display: flex;
@@ -1262,4 +1235,287 @@ h2:focus { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .typing span { animation: none; opacity: 0.7; }
+}
+
+/* ---- Intro: what the site is for, until dismissed ---- */
+
+.intro {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: #20242A;
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.intro p { margin: 0 0 8px; }
+
+.panel .intro-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.intro-small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.intro .secondary.compact { margin-top: 2px; }
+
+/* ---- The brief: four numbered questions ---- */
+
+.brief {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.step {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.step-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.step-n {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--accent-text);
+  font-size: 11px;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.options button {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 9px 11px;
+  text-align: left;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.options button:hover { border-color: var(--muted); }
+
+.options [aria-checked="true"] {
+  background: rgba(61, 143, 123, 0.16);
+  border-color: var(--accent);
+}
+
+.options button:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.option-label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.option-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.fine-tune {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.fine-tune summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.fine-tune summary:hover { color: var(--text); }
+
+.fine-tune[open] summary { margin-bottom: 8px; }
+
+.fine-tune-note {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fine-tune .check { margin-top: 10px; }
+
+/* ---- Under the shortlist: compare, share, and the limits ---- */
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.result-actions .secondary.compact { margin-top: 0; }
+
+.share-status {
+  color: var(--ok);
+  font-size: 12px;
+}
+
+.limits {
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.panel .limits h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.limits ul {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.limits strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.drawer-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ---- Compare: three wards side by side ---- */
+
+.compare-pickers {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+}
+
+.compare-pick select {
+  width: 100%;
+  padding: 7px 9px;
+  background: #20242A;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.compare-pick select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.compare-scroll { overflow-x: auto; }
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 6px 4px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 400;
+  text-align: right;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.compare-table thead td,
+.compare-table thead th { border-top: 0; }
+
+.compare-table thead th .text-button {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.compare-table tbody th {
+  width: 32%;
+  padding-left: 0;
+  color: var(--text);
+  text-align: left;
+}
+
+.compare-table .part-row th {
+  padding-left: 10px;
+  color: var(--muted);
+}
+
+.compare-table td.best {
+  color: var(--ok);
+  font-weight: 500;
+}
+
+/* ---- Legend: colour by score or by competition ---- */
+
+.legend-modes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.legend-modes button {
+  flex: 1;
+  padding: 3px 6px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.legend-modes [aria-pressed="true"] {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #FFFFFF;
+}
+
+@media (max-width: 859px) {
+  .legend .legend-modes { display: none; }
+
+  .legend:has(details[open]) .legend-modes { display: flex; }
+
+  .options { grid-template-columns: 1fr 1fr; }
 }

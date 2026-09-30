@@ -1,6 +1,6 @@
 import { EXAMPLES } from "./chat.js";
 import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
-import { AREAS, COMPONENTS, monthlyRent, parts, PRESET_NAMES, presetOf, roundedParts } from "./score.js";
+import { AREAS, briefOf, COMPETITION, COMPONENTS, CUSTOMERS, monthlyRent, parts, roundedParts } from "./score.js";
 
 // The panel has one scrolling body and an optional footer that keeps the
 // chat's input in view. The tabs in the header switch between them.
@@ -27,44 +27,99 @@ export function renderLoadError(element, detail) {
     </div>`;
 }
 
-// "Balanced", or "Your own weights" once a slider has moved off a preset.
-export function weightsName(weights, presets) {
-  const preset = presetOf(weights, presets);
-  return preset ? PRESET_NAMES[preset] : "Your own weights";
+// "a 300 sq ft cafe for office workers and students, avoiding competition,
+// in Pune city, rent up to ₹35k": the plan as one sentence.
+export function briefSentence(p) {
+  const { customers, competition } = briefOf(p.weights);
+  const who = customers && competition
+    ? `for ${CUSTOMERS[customers].label.toLowerCase()}, ${COMPETITION[competition].phrase}`
+    : "with your own weights";
+  return `a ${num(p.sqft)} sq ft ${CATEGORIES[p.category].one} ${who}, in ${AREAS[p.area] === "All of Pune" ? "all of Pune" : AREAS[p.area]}`
+    + `${p.budget ? `, rent up to ${num(rupees(p.budget))}` : ""}`;
 }
 
-// ---- Plan: the inputs, then the top 5 they produce -------------------------
+// ---- Plan: the brief, then the shortlist it produces -----------------------
 
-function plan(state, { wards, meta, rent, ranking }) {
+const FORMATS = {
+  cafe: "coffee, chai, bakery",
+  fast_food: "burgers, pizza, rolls",
+};
+
+function plan(state, data) {
   const { plan: p } = state;
-  const few = wards.filter((f) => f.properties.status !== "scored").length;
+  const { customers, competition } = briefOf(p.weights);
+  const few = data.wards.filter((f) => f.properties.status !== "scored").length;
   return {
     body: `
-      <section class="plan" aria-label="Your plan">
-        ${choice("Opening a", "category", p.category, Object.fromEntries(Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])))}
-        ${choice("Area", "area", p.area, AREAS)}
-        ${weightsControl(p.weights, meta.score.presets)}
-        <div class="field-pair">
-          <label class="field"><span class="field-label">Shop size</span>
-            <span class="input-unit"><input id="sqft" type="number" inputmode="numeric" min="50" max="5000" step="25"
-              value="${p.sqft}"><span>sq ft</span></span></label>
-          <label class="field"><span class="field-label">Rent budget a month</span>
-            <span class="input-unit"><span>₹</span><input id="budget" type="number" inputmode="numeric" min="1000"
-              step="1000" placeholder="any" value="${p.budget ?? ""}"></span></label>
-        </div>
-        <label class="check"><input id="include-low" type="checkbox" ${p.includeLow ? "checked" : ""}>
-          <span>Include the ${num(few)} wards with under ${num(meta.min_outlets)} outlets mapped</span></label>
+      ${state.intro ? intro() : ""}
+      <section class="brief" aria-label="Your brief">
+        ${step(1, "What are you opening?", options("category", p.category,
+          Object.fromEntries(Object.entries(CATEGORIES).map(([key, c]) => [key, { label: c.label, hint: FORMATS[key] }])), "formats", "Format"))}
+        ${step(2, "Who are your customers?", options("customers", customers, CUSTOMERS, "customers", "Customers"))}
+        ${step(3, "How much competition can you take?", segmented("competition", competition,
+          Object.fromEntries(Object.entries(COMPETITION).map(([key, c]) => [key, c.label])), "Competition"))}
+        ${step(4, "Where, and how big?", `
+          ${segmented("area", p.area, AREAS, "Area")}
+          <div class="field-pair">
+            <label class="field"><span class="field-label">Shop size</span>
+              <span class="input-unit"><input id="sqft" type="number" inputmode="numeric" min="50" max="5000" step="25"
+                value="${p.sqft}"><span>sq ft</span></span></label>
+            <label class="field"><span class="field-label">Rent you can pay a month</span>
+              <span class="input-unit"><span>₹</span><input id="budget" type="number" inputmode="numeric" min="1000"
+                step="1000" placeholder="any" value="${p.budget ?? ""}"></span></label>
+          </div>`)}
+        <details class="fine-tune" id="fine-tune" ${state.fineTune ? "open" : ""}>
+          <summary>Fine-tune the score</summary>
+          ${weightsControl(p.weights)}
+          <label class="check"><input id="include-low" type="checkbox" ${p.includeLow ? "checked" : ""}>
+            <span>Include the ${num(few)} wards with under ${num(data.meta.min_outlets)} outlets mapped (thin data)</span></label>
+        </details>
       </section>
-      <section class="results" id="results" aria-labelledby="results-title">${results(state, { wards, meta, rent, ranking })}</section>`,
+      <section class="results" id="results" aria-labelledby="results-title">${results(state, data)}</section>
+      ${limits()}`,
     foot: "",
   };
 }
 
-// The four weights as sliders, with the presets as starting points.
-function weightsControl(weights, presets) {
-  const current = presetOf(weights, presets);
-  const buttons = Object.keys(presets).map((name) =>
-    `<button role="radio" aria-checked="${name === current}" data-action="preset" data-value="${name}">${PRESET_NAMES[name]}</button>`);
+// What the site is for, until it's dismissed.
+function intro() {
+  return `
+    <section class="intro" aria-labelledby="intro-title">
+      <h2 id="intro-title" class="intro-title">Find where to look first</h2>
+      <p>Planning a cafe or a QSR in Pune? Answer four questions. Localio ranks all 140 wards on the people around and
+        the competition already there, and estimates the rent, so you know which areas to visit first.</p>
+      <p class="intro-small">It can't predict sales, and its data has gaps: see "Before you decide" below the list.</p>
+      <button class="secondary compact" data-action="dismiss-intro">Got it</button>
+    </section>`;
+}
+
+function step(n, title, control) {
+  return `
+    <fieldset class="step">
+      <legend class="step-title"><span class="step-n num" aria-hidden="true">${n}</span>${title}</legend>
+      ${control}
+    </fieldset>`;
+}
+
+// Radio buttons as cards, each with a line of detail.
+function options(action, value, choices, name, label) {
+  const buttons = Object.entries(choices).map(([key, c]) => `
+    <button role="radio" aria-checked="${key === value}" data-action="${action}" data-value="${key}"
+      aria-label="${escapeHtml(c.label)}" aria-describedby="hint-${key}">
+      <span class="option-label">${c.label}</span><span class="option-hint" id="hint-${key}">${c.hint}</span>
+    </button>`);
+  return `<div class="options options-${name}" role="radiogroup" aria-label="${label}">${buttons.join("")}</div>`;
+}
+
+// A row of buttons that behave as radio buttons.
+function segmented(action, value, choices, label) {
+  const buttons = Object.entries(choices).map(([key, label]) =>
+    `<button role="radio" aria-checked="${key === value}" data-action="${action}" data-value="${key}">${label}</button>`);
+  return `<div class="segmented" role="radiogroup" aria-label="${label}">${buttons.join("")}</div>`;
+}
+
+// The four weights as sliders, for anyone who wants more than the brief.
+function weightsControl(weights) {
   const sum = COMPONENTS.reduce((total, c) => total + weights[c.key], 0);
   const sliders = COMPONENTS.map((c) => `
     <label class="weight">
@@ -75,25 +130,25 @@ function weightsControl(weights, presets) {
       <span class="visually-hidden" id="about-${c.key}">${c.about}</span>
     </label>`);
   return `
-    <fieldset class="weights">
-      <legend class="field-label">What matters to you</legend>
-      <div class="segmented" role="radiogroup" aria-label="Start from">${buttons.join("")}</div>
-      <div class="weight-list">${sliders.join("")}</div>
-    </fieldset>`;
+    <p class="fine-tune-note">Your answers set how much each part of the score counts. Move a slider to set it
+      yourself.</p>
+    <div class="weight-list">${sliders.join("")}</div>`;
 }
 
 function share(weight, sum) {
   return `${Math.round(sum ? (100 * weight) / sum : 25)}%`;
 }
 
-// Moving a slider updates the shares and the preset buttons in place, so
+// Moving a slider updates the shares and the brief's answers in place, so
 // the slider being dragged keeps its focus.
-export function updateWeights(body, weights, presets) {
+export function updateWeights(body, weights) {
   const sum = COMPONENTS.reduce((total, c) => total + weights[c.key], 0);
   for (const output of body.querySelectorAll("[data-share]")) output.textContent = share(weights[output.dataset.share], sum);
-  const current = presetOf(weights, presets);
-  for (const button of body.querySelectorAll("[data-action=preset]")) {
-    button.setAttribute("aria-checked", String(button.dataset.value === current));
+  const brief = briefOf(weights);
+  for (const action of ["customers", "competition"]) {
+    for (const button of body.querySelectorAll(`[data-action=${action}]`)) {
+      button.setAttribute("aria-checked", String(button.dataset.value === brief[action]));
+    }
   }
 }
 
@@ -103,24 +158,12 @@ export function renderResults(body, state, data) {
   if (section) section.innerHTML = results(state, data);
 }
 
-function results(state, { wards, meta, rent, ranking }) {
+function results(state, { wards, rent, ranking }) {
   const p = state.plan;
   return `
-    <h2 id="results-title" tabindex="-1">Top 5 for a ${CATEGORIES[p.category].one}</h2>
-    <p class="results-sub">${weightsName(p.weights, meta.score.presets)} · ${AREAS[p.area]} · ${num(ranking.length)} wards fit</p>
+    <h2 id="results-title" tabindex="-1">Your shortlist</h2>
+    <p class="results-sub">For ${briefSentence(p)}. ${num(ranking.length)} of ${num(wards.length)} wards fit.</p>
     ${ranking.length ? picks(state, { rent, ranking }) : empty(state, { wards, rent })}`;
-}
-
-// A row of buttons that behave as radio buttons, for one plan setting.
-function choice(label, key, value, options) {
-  const id = `label-${key}`;
-  const buttons = Object.entries(options).map(([option, text]) =>
-    `<button role="radio" aria-checked="${option === value}" data-action="set" data-key="${key}" data-value="${option}">${text}</button>`);
-  return `
-    <div class="field-row">
-      <span class="field-label" id="${id}">${label}</span>
-      <div class="segmented" role="radiogroup" aria-labelledby="${id}">${buttons.join("")}</div>
-    </div>`;
 }
 
 // A bar of the score's four parts, each as wide as its points.
@@ -130,7 +173,7 @@ export function partsBar(items) {
 }
 
 // Every row states all four parts of its score, so the ranking explains
-// itself; the rent is for the shop size typed above.
+// itself; the rent is for the shop size in the brief.
 function picks(state, { rent, ranking }) {
   const { category, weights, sqft } = state.plan;
   const rows = ranking.slice(0, 5).map(({ feature, score }, i) => {
@@ -142,7 +185,7 @@ function picks(state, { rent, ranking }) {
         <span class="pick-rank num">${i + 1}</span>
         <span class="pick-main">
           <span class="pick-head"><span class="pick-name">${escapeHtml(p.name)}${p.status === "scored" ? ""
-            : ' <span class="low-flag">few outlets</span>'}</span>
+            : ' <span class="low-flag">thin data</span>'}</span>
             <span class="pick-rent num">${rupees(monthlyRent(rent, p, sqft))}/mo</span></span>
           ${partsBar(items)}
           <span class="pick-parts">${items.map((item, j) =>
@@ -153,8 +196,12 @@ function picks(state, { rent, ranking }) {
   });
   return `
     <ol class="picks">${rows.join("")}</ol>
-    <p class="note">Each score is its four parts added up. Move the sliders to change how much each counts; click a
-      ward for the details.</p>`;
+    <div class="result-actions">
+      ${ranking.length >= 2 ? '<button class="secondary compact" data-action="compare">Compare the top 3</button>' : ""}
+      <button class="secondary compact" data-action="share">Copy link to this shortlist</button>
+      <span class="share-status" role="status" id="share-status"></span>
+    </div>
+    <p class="note">Scores are out of 100: the four parts added up. Click a ward for its details.</p>`;
 }
 
 // Says what emptied the list, and offers the smallest change that fixes it.
@@ -179,7 +226,25 @@ function empty(state, { wards, rent }) {
     </div>`;
 }
 
-// ---- Ask: the chat, answering from the same data and the same plan ----------
+// The limits, where the decision is made rather than in a drawer.
+function limits() {
+  return `
+    <section class="limits" aria-labelledby="limits-title">
+      <h3 id="limits-title">Before you decide</h3>
+      <ul>
+        <li><strong>Visit first.</strong> The score compares wards from data. It can't see the street, the shop or
+          the footfall at your hours.</li>
+        <li><strong>Outlets are undercounted.</strong> They come from OpenStreetMap, which misses places, most of all
+          in Pimpri-Chinchwad. "No cafes" can mean "none mapped".</li>
+        <li><strong>Residents are 2011 figures.</strong> Newer areas at the city's edge have grown since.</li>
+        <li><strong>Rent is an estimate</strong> from published rents, not a quote.</li>
+        <li><strong>No sales forecast.</strong> Localio says where to look, not what a shop will earn.</li>
+      </ul>
+      <button class="text-button" data-action="method">How the score and rent are worked out</button>
+    </section>`;
+}
+
+// ---- Ask: the chat, answering from the same data and the same brief ---------
 
 // Ranked answers get numbers; reasons and comparisons get bullets.
 function list({ kind, list: lines }) {
@@ -187,15 +252,8 @@ function list({ kind, list: lines }) {
   return `<${tag} class="msg-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</${tag}>`;
 }
 
-const SOURCES = {
-  gemini: "Written by Gemini from Localio's data",
-  fallback: "Gemini didn't answer, so this is Localio's built-in answer",
-  "built-in": "",
-};
-
-function ask(state, { conversation, meta }) {
-  const { messages, draft, pending, ai } = conversation;
-  const p = state.plan;
+function ask(state, { conversation }) {
+  const { messages, draft, pending } = conversation;
   const items = messages.map((m, i) => (m.role === "user"
     ? `<li class="msg msg-user">${escapeHtml(m.text)}</li>`
     : `<li class="msg msg-answer${m.kind === "refuse" ? " msg-refused" : ""}">
@@ -203,19 +261,17 @@ function ask(state, { conversation, meta }) {
         ${m.list?.length ? list(m) : ""}
         ${m.wards?.length ? `<div class="chips">${m.wards.map((name) =>
           `<button class="chip" data-action="open-ward" data-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("")}</div>` : ""}
-        ${m.plan ? `<button class="secondary compact" data-action="apply" data-value="${i}">Use this plan on the map</button>` : ""}
-        ${SOURCES[m.source] ? `<p class="msg-note">${SOURCES[m.source]}</p>` : ""}
+        ${m.plan ? `<button class="secondary compact" data-action="apply" data-value="${i}">Use this on the map</button>` : ""}
       </li>`));
   const intro = messages.length ? "" : `
     <h2 tabindex="-1">Ask about any ward</h2>
-    <p class="lede">${ai ? "Answers are written by Gemini, from" : "Answers come only from"} Localio's data, using your plan.
-      Mention a format, area, budget, shop size or what matters, and I'll use it.</p>
+    <p class="lede">Ask in your own words: where to open, why a ward ranks where it does, what rent to expect. Answers
+      come from Localio's ward data and your brief. Click a ward in an answer to check its numbers.</p>
     <div class="suggestions">${EXAMPLES.map((q) =>
       `<button class="chip" data-action="ask" data-value="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}</div>`;
   return {
     body: `
-      <p class="chat-context">Your plan: ${CATEGORIES[p.category].label} · ${weightsName(p.weights, meta.score.presets)} ·
-        ${AREAS[p.area]} · ${num(p.sqft)} sq ft${p.budget ? ` · rent up to ${num(rupees(p.budget))}` : ""}</p>
+      <p class="chat-context">Your brief: ${briefSentence(state.plan)}</p>
       ${intro}
       <ol class="messages" aria-live="polite" aria-label="Conversation">${items.join("")}
         ${pending ? '<li class="msg msg-answer typing" aria-label="Writing an answer"><span></span><span></span><span></span></li>' : ""}
@@ -223,7 +279,7 @@ function ask(state, { conversation, meta }) {
     foot: `
       <form class="ask-form" data-form="ask">
         <label class="visually-hidden" for="ask-input">Your question</label>
-        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Why is #1 ranked first?"
+        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Best spot near colleges under ₹35k rent?"
           ${pending ? "disabled" : ""}>${escapeHtml(draft)}</textarea>
         <button class="primary" type="submit" ${pending ? "disabled" : ""}>Send</button>
       </form>`,

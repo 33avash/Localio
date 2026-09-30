@@ -1,7 +1,8 @@
 // The chat: answers questions about opening a cafe or QSR in Pune from the
-// ward data, in the browser, and only from it. There is no language model:
-// each answer is built from the same numbers as the map, names the wards
-// it used, and anything off-topic is refused rather than guessed.
+// ward data, in the browser, and only from it. This is the rule-based
+// engine: each answer is built from the same numbers as the map, names the
+// wards it used, and anything off-topic is refused rather than guessed.
+// llm.js can reword an answer from these facts; this is the fallback.
 //
 // reply(question, context) -> { kind, text, list?, wards, plan? }
 //   kind   what was understood: ward, compare, why, rent, ranking, gap,
@@ -11,7 +12,7 @@
 //   plan   a plan the question asked for, if it differs from the current one
 
 import { CATEGORIES, rupees } from "./format.js";
-import { AREAS, competitionLevel, monthlyRent, parts, PRESET_NAMES, presetOf, rank, roundedParts, standing } from "./score.js";
+import { AREAS, briefName, COMPETITION, competitionLevel, CUSTOMERS, monthlyRent, parts, rank, roundedParts, standing } from "./score.js";
 
 // A question must mention a ward or one of these to be in scope.
 const DOMAIN = /\b(caf[eé]s?|coffee|chai|tea|bakery|bakeries|desserts?|qsrs?|quick[- ]service|fast[- ]food|burgers?|pizzas?|momos?|restaurants?|food|eat|eating|outlets?|shops?|stalls?|rents?|footfall|busy|busyness|competitors?|competition|wards?|localit(y|ies)|neighbou?rhoods?|areas?|scores?|ranks?|ranked|shortlist|localio|pcmc|pmc)\b/i;
@@ -19,17 +20,18 @@ const FORMATS = {
   fast_food: /\b(qsrs?|quick[- ]service|fast[- ]food|burgers?|pizzas?|momos?|rolls?|sandwich(es)?|shawarma)\b/i,
   cafe: /\b(caf[eé]s?|coffee|chai|tea|bakery|bakeries|desserts?|ice[- ]cream)\b/i,
 };
-// Words that pick a preset, and words that put one component at the top
-// weight (5) on top of whatever the weights were.
-const PRESET_WORDS = [
-  ["quiet", /\b(competition|competitors?|fewest|least|unmet|under[- ]?served|gaps?|untapped|room|quiet|saturat\w*)\b/i],
-  ["busy", /\b(busy|busiest|footfall|crowds|traffic|popular|demand|lively)\b/i],
-  ["balanced", /\bbalanced?\b/i],
+// Words that answer the brief's two questions, first match wins: who the
+// customers are, and how much competition is acceptable. "Busy" means
+// people out and about, and not minding company.
+const CUSTOMER_WORDS = [
+  ["offices", /\b(offices?|office workers|colleges?|students?|stations?|commuters?|daytime|workers|it parks?|tech parks?)\b/i],
+  ["locals", /\b(residential|residents|families|locals|housing)\b/i],
+  ["outings", /\b(eating out|food streets?|nightlife|hangouts?|busy|busiest|footfall|crowds|traffic|popular|lively)\b/i],
+  ["everyone", /\b(everyone|a mix|all kinds)\b/i],
 ];
-const EMPHASIS = [
-  ["daytime", /\b(offices?|office workers|colleges?|students?|stations?|commuters?|daytime|workers)\b/i],
-  ["residents", /\b(residential|residents|families|locals|housing)\b/i],
-  ["eating_out", /\b(eating out|food streets?|nightlife|hangouts?)\b/i],
+const COMPETITION_WORDS = [
+  ["any", /\b(don'?t mind (the )?competition|competition doesn'?t matter|busy|busiest|footfall|crowds|traffic|popular|lively)\b/i],
+  ["avoid", /\b(competition|competitors?|fewest|least|unmet|under[- ]?served|gaps?|untapped|room|quiet|saturat\w*)\b/i],
 ];
 // "PCMC 56" is part of a ward's name, not the area.
 const AREA_WORDS = [
@@ -55,9 +57,9 @@ const FOLLOW_UP = /\b(it|there|this ward|that ward|this one|that one)\b/i;
 
 export const EXAMPLES = [
   "Where should I open a cafe?",
+  "Best spot near colleges under ₹35k rent?",
   "Why is #1 ranked first?",
   "Compare Baner and Aundh",
-  "Cafes in PCMC under ₹30k rent",
   "Which wards have no QSRs yet?",
   "How is the score worked out?",
 ];
@@ -110,16 +112,16 @@ export function mentioned(question, index) {
 }
 
 // What the question asks for, on top of the current plan.
-export function parsePlan(question, plan, presets) {
+export function parsePlan(question, plan) {
   const asked = {};
   const formats = Object.keys(FORMATS).filter((key) => FORMATS[key].test(question));
   if (formats.length === 1) asked.category = formats[0];
-  const preset = PRESET_WORDS.find(([, pattern]) => pattern.test(question));
-  let weights = preset ? { ...presets[preset[0]] } : null;
-  for (const [key, pattern] of EMPHASIS) {
-    if (pattern.test(question)) weights = { ...(weights ?? plan.weights), [key]: 5 };
+  const [customers] = CUSTOMER_WORDS.find(([, pattern]) => pattern.test(question)) ?? [];
+  const [competition] = COMPETITION_WORDS.find(([, pattern]) => pattern.test(question)) ?? [];
+  if (customers || competition) {
+    asked.weights = { ...plan.weights, ...(customers ? CUSTOMERS[customers].weights : {}),
+      ...(competition ? { room: COMPETITION[competition].room } : {}) };
   }
-  if (weights) asked.weights = weights;
   const area = AREA_WORDS.find(([, pattern]) => pattern.test(question));
   if (area) asked.area = area[0];
   const budget = question.match(BUDGET);
@@ -145,7 +147,7 @@ export function reply(question, context) {
   if (INTENTS.help.test(q) && !named.length && !DOMAIN.test(q.replace(INTENTS.help, ""))) return help();
   if (!named.length && position === null && !DOMAIN.test(q)) return refuse();
 
-  const { asked, plan } = parsePlan(q, current, meta.score.presets);
+  const { asked, plan } = parsePlan(q, current);
   const facts = { wards, meta, rent, plan };
   if (INTENTS.method.test(q)) return method(plan, meta);
   if (position !== null && !named.length) {
@@ -192,8 +194,8 @@ function method(plan, meta) {
   const reference = meta.score.reference_per_10k[plan.category];
   return {
     kind: "method",
-    text: `Each ward's score out of 100 adds up four parts, each 0 to 1 times its weight. With `
-      + `${weightsName(plan, meta)}, they count:`,
+    text: "Each ward's score out of 100 adds up four parts, each 0 to 1 times its weight. For your brief "
+      + `(${briefName(plan.weights)}), they count:`,
     list: [
       ...items.slice(0, 3).map((item) => `${item.label} (${Math.round(item.share * 100)}%): ${item.about}, as the ward's `
         + "standing among Pune's 140 wards."),
@@ -225,7 +227,7 @@ function about(ward, facts, position) {
   return {
     kind: "ward",
     text: `${label(p)} has ${p.population.toLocaleString("en-US")} residents and ${outlets}. For a `
-      + `${c.one} it scores ${Math.round(score.total)}/100 (${weightsName(plan, meta)}): ${sum(score)}.${rank} Rent for `
+      + `${c.one} it scores ${Math.round(score.total)}/100 (${briefName(plan.weights)}): ${sum(score)}.${rank} Rent for `
       + `${plan.sqft} sq ft is about ${rupees(monthlyRent(rent, p, plan.sqft))} a month.${shaky}`,
     wards: [ward],
   };
@@ -287,7 +289,7 @@ function compare(named, facts) {
     : `${best.ward.properties.name} comes out ahead`;
   return {
     kind: "compare",
-    text: `For a ${c.one} (${weightsName(plan, meta)}), ${verdict}:`,
+    text: `For a ${c.one} (${briefName(plan.weights)}), ${verdict}:`,
     list: rows.map((row) => row.line),
     wards: rows.map((row) => row.ward),
   };
@@ -297,7 +299,7 @@ function shortlist(facts, asked, current) {
   const { wards, meta, rent, plan } = facts;
   const ranked = rank(wards, plan, rent).slice(0, 5);
   const c = CATEGORIES[plan.category];
-  const scope = describe(plan, meta);
+  const scope = describe(plan);
   if (!ranked.length) {
     return {
       kind: "ranking", text: `No ward fits this plan (${scope}). Try a higher rent budget or another area.`,
@@ -367,13 +369,8 @@ function sum(score) {
   return score.items.map((item, i) => `${item.label.toLowerCase()} ${points[i]}`).join(" + ");
 }
 
-function weightsName(plan, meta) {
-  const preset = presetOf(plan.weights, meta.score.presets);
-  return preset ? PRESET_NAMES[preset] : "your own weights";
-}
-
-function describe(plan, meta) {
-  const parts = [weightsName(plan, meta), AREAS[plan.area]];
+function describe(plan) {
+  const parts = [briefName(plan.weights), AREAS[plan.area]];
   if (plan.budget) parts.push(`rent up to ${rupees(plan.budget)} for ${plan.sqft} sq ft`);
   return parts.join(", ");
 }

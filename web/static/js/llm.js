@@ -1,4 +1,5 @@
-// The chat's language model: Google Gemini, called from the browser.
+// The chat's language model (Google Gemini), called from the browser. The
+// site never names it: to the user it is simply Localio's assistant.
 //
 // Gemini never sees the internet or its own memory of Pune. For every
 // question, the built-in engine (chat.js) works out what's being asked and
@@ -11,7 +12,7 @@
 
 import { parsePlan } from "./chat.js";
 import { CATEGORIES, rupees } from "./format.js";
-import { AREAS, COMPONENTS, competitionLevel, monthlyRent, parts, PRESET_NAMES, presetOf, rank, roundedParts } from "./score.js";
+import { AREAS, briefName, COMPONENTS, competitionLevel, monthlyRent, parts, rank, roundedParts } from "./score.js";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 // Fast first; the larger model only if the first is busy.
@@ -33,7 +34,9 @@ Rules:
 - Use figures exactly as given; don't recalculate them. Write money like ₹31k or ₹1.2L.
 - If the question implies a different plan (size, area, budget, what matters), use the facts for that plan.
 - Be concise and plain: at most 4 short sentences, or a short list of up to 5 lines. No markdown headings.
-- In "wards", list the exact names of the wards your answer mentions, spelled as in the facts.`;
+- In "wards", list the exact names of the wards your answer mentions, spelled as in the facts.
+- You are Localio's assistant. Never name the AI model or company behind you; if asked, say you're
+  Localio's assistant and answer from its ward data.`;
 
 const SCHEMA = {
   type: "OBJECT",
@@ -106,7 +109,7 @@ async function call(model, key, contents) {
 // ft"), so Gemini never has to adjust a figure itself.
 export function facts(question, context, builtIn) {
   const { wards, meta, rent, plan: current } = context;
-  const { asked, plan } = parsePlan(question, current, meta.score.presets);
+  const { asked, plan } = parsePlan(question, current);
   const ranking = Object.keys(asked).length ? rank(wards, plan, rent) : context.ranking;
   const c = CATEGORIES[plan.category];
   const reference = meta.score.reference_per_10k[plan.category];
@@ -114,8 +117,8 @@ export function facts(question, context, builtIn) {
   for (const { feature } of ranking.slice(0, 5)) if (!focus.includes(feature)) focus.push(feature);
 
   const lines = [
-    `The user's plan on the map: ${describe(current, meta)}.`,
-    Object.keys(asked).length ? `This question implies: ${describe(plan, meta)}. The facts below are for that plan.` : "",
+    `The user's plan on the map: ${describe(current)}.`,
+    Object.keys(asked).length ? `This question implies: ${describe(plan)}. The facts below are for that plan.` : "",
     "",
     "How the score works: each of the four parts is 0 to 1. Residents, eating out and daytime draw are the ward's "
       + "standing among Pune's 140 wards on residents per km², food and drink places per km², and offices, colleges and "
@@ -141,13 +144,12 @@ export function facts(question, context, builtIn) {
   return lines.join("\n");
 }
 
-function describe(plan, meta) {
-  const preset = presetOf(plan.weights, meta.score.presets);
+function describe(plan) {
   const shares = parts({ components: { residents: 0, eating_out: 0, daytime: 0 }, categories: { [plan.category]: { room: 0 } } },
     plan.category, plan.weights).items;
   return `a ${CATEGORIES[plan.category].one}, ${AREAS[plan.area]}, a ${plan.sqft} sq ft shop`
-    + `${plan.budget ? `, rent budget ${rupees(plan.budget)} a month` : ""}; weights ${preset ? `"${PRESET_NAMES[preset]}"` : "of their own"} (`
-    + shares.map((s) => `${s.label.toLowerCase()} ${Math.round(s.share * 100)}%`).join(", ") + ")";
+    + `${plan.budget ? `, rent budget ${rupees(plan.budget)} a month` : ""}; customers and competition: `
+    + `${briefName(plan.weights)} (weights ` + shares.map((s) => `${s.label.toLowerCase()} ${Math.round(s.share * 100)}%`).join(", ") + ")";
 }
 
 function card(ward, plan, rent, reference, ranking) {

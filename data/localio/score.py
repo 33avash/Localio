@@ -19,8 +19,9 @@ Each component runs from 0 to 1, higher is better for a new outlet:
     score = 100 x sum(weight x component) / sum(weights)
 
 So each component contributes 100 x weight x component / sum(weights)
-points, and the points add up to the score. The presets are starting
-weights; the browser lets people move each one.
+points, and the points add up to the score. WEIGHTS is the default brief
+(a mix of customers, some competition is fine); on the site, the user's
+brief sets the weights, and each can be fine-tuned.
 
 Wards with fewer than MIN_OUTLETS food and drink outlets mapped are scored
 but marked low confidence: that few usually means thin mapping, not an
@@ -39,14 +40,10 @@ UNMAPPED = 1
 # Decimal places the components are published (and scored) with.
 PRECISION = 4
 
-# Starting weights (0-5 each). The site and the chat read these from
-# wards.geojson, so all three always agree.
-PRESETS = {
-    "balanced": {"residents": 1, "eating_out": 1, "daytime": 1, "room": 3},
-    "busy": {"residents": 3, "eating_out": 3, "daytime": 3, "room": 2},
-    "quiet": {"residents": 1, "eating_out": 1, "daytime": 1, "room": 5},
-}
-DEFAULT_PRESET = "balanced"
+# The default weights (0-5 each): the site's default brief. They're
+# published in wards.geojson, and a browser test checks the site's default
+# brief gives exactly these scores.
+WEIGHTS = {"residents": 1, "eating_out": 1, "daytime": 1, "room": 3}
 
 
 def percentile(values: pd.Series) -> pd.Series:
@@ -65,7 +62,7 @@ def references(wards: pd.DataFrame) -> dict[str, float]:
 
 
 def score(wards: pd.DataFrame, weights: dict[str, float] | None = None) -> tuple[pd.DataFrame, dict[str, float]]:
-    weights = weights or PRESETS[DEFAULT_PRESET]
+    weights = weights or WEIGHTS
     scored = wards.copy()
     scored["low_confidence"] = scored["total_pois"] < MIN_OUTLETS
     scored["residents_per_km2"] = scored["population"] / scored["area_km2"]

@@ -1,12 +1,13 @@
 import { escapeHtml, num } from "./format.js";
-import { COMPONENTS, PRESET_NAMES } from "./score.js";
+import { COMPETITION, COMPONENTS, CUSTOMERS } from "./score.js";
 
 // "How it works": the data, the score, rent, the chat and the limits, in
 // plain words. Every number is read from the pipeline's output.
 export function methodHtml({ meta, wards, rent }) {
-  const { presets, reference_per_10k: reference } = meta.score;
-  const presetRows = Object.entries(presets).map(([name, w]) =>
-    `<li>${PRESET_NAMES[name]}: ${COMPONENTS.map((c) => `${c.label.toLowerCase()} ${num(w[c.key])}`).join(", ")}</li>`);
+  const { reference_per_10k: reference } = meta.score;
+  const customerRows = Object.values(CUSTOMERS).map((c) =>
+    `<li>${c.label}: ${COMPONENTS.slice(0, 3).map((part) => `${part.label.toLowerCase()} ${num(c.weights[part.key])}`).join(", ")}</li>`);
+  const competitionRows = Object.values(COMPETITION).map((c) => `${c.label.toLowerCase()} ${num(c.room)}`).join(", ");
   const tiers = Object.entries(rent.tiers).map(([tier, t]) => `<li>${tier}: ${num(`${t.multiplier}×`)}
     ${t.streets.length ? `(${t.streets.map((s) => `${escapeHtml(s.street)} ₹${s.rent_psf}`).join(", ")})` : "(no published street)"}</li>`);
   const few = wards.filter((f) => f.properties.status !== "scored").length;
@@ -41,8 +42,10 @@ export function methodHtml({ meta, wards, rent }) {
           at that rate and higher with fewer. Every count gets one extra, because OpenStreetMap misses outlets.</li>
       </ul>
       <p>Score = 100 × Σ(weight × part) ÷ Σ(weights), so each part adds 100 × its share of the weight × its value, and
-        the parts add up to the score. You set the weights (0–5) with the sliders; the presets are starting points:</p>
-      <ul class="plain">${presetRows.join("")}</ul>
+        the parts add up to the score. Your brief sets the weights (0–5):</p>
+      <ul class="plain">${customerRows.join("")}
+        <li>Low competition: ${competitionRows}</li></ul>
+      <p class="note">"Fine-tune the score" lets you set any weight yourself.</p>
       <p class="note">${num(few)} wards have under ${num(meta.min_outlets)} outlets mapped. They're scored, but hatched on
         the map and left off the shortlist unless you include them: that few usually means thin mapping, not an empty
         market.</p>
@@ -64,12 +67,12 @@ export function methodHtml({ meta, wards, rent }) {
 
     <section class="drawer-section">
       <h3>4. The chat</h3>
-      <p>Localio's own engine reads your question (the wards it names, and any format, area, budget, shop size or
-        priority such as "near offices") and computes the answer from the same data as the map. Google Gemini then
-        writes the reply from those facts only: your plan, how the score works, the top 5 and a card for each ward in
-        question. It must name the wards it used, which are checked against the data, and it declines anything that
-        isn't about opening a cafe or QSR in Pune. If Gemini isn't available, you get the built-in answer, marked as
-        such.</p>
+      <p>Localio reads your question (the wards it names, and any format, area, budget, shop size or customers such as
+        "near offices") and works out the answer from the same data as the map. An AI assistant then words the reply
+        from those facts only: your brief, how the score works, the top 5 and a card for each ward in question. The
+        wards it names are checked against the data, and it declines anything that isn't about opening a cafe or QSR
+        in Pune. If it can't answer, Localio gives its own answer instead. AI can still misread a question, so check
+        a ward's numbers by clicking it.</p>
     </section>
 
     <section class="drawer-section">
@@ -79,6 +82,7 @@ export function methodHtml({ meta, wards, rent }) {
         <li>Residents are 2011 Census totals shared across 2012 wards; Pimpri-Chinchwad has no voter roll, so its
           wards share equally and their residents per km² mostly reflect ward size.</li>
         <li>The score compares wards. It doesn't forecast sales, and rent is a guide, not a quote.</li>
+        <li>It knows nothing about a particular shop: frontage, parking, the building, or the lease.</li>
       </ul>
     </section>`;
 }

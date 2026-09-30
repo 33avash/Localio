@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from localio import db
-from localio.score import COMPONENTS, MIN_OUTLETS, PRESETS, percentile, references, score
+from localio.score import COMPONENTS, MIN_OUTLETS, WEIGHTS, percentile, references, score
 
 
 def test_percentile_is_the_share_of_wards_below():
@@ -49,15 +49,15 @@ def test_the_score_is_the_weighted_mean_of_its_components():
     assert scored[["cafe_score", "fast_food_score"]].stack().between(0, 100).all()
 
 
-def test_busy_areas_and_low_competition_rank_differently():
-    leaders = {name: score(_wards(), w)[0]["cafe_score"].idxmax() for name, w in PRESETS.items()}
-    assert leaders["busy"] == "busy"
-    assert leaders["quiet"] != "busy"
+def test_the_weights_decide_who_leads():
+    crowds = {"residents": 3, "eating_out": 3, "daytime": 3, "room": 1}
+    room = {"residents": 1, "eating_out": 1, "daytime": 1, "room": 5}
+    assert score(_wards(), crowds)[0]["cafe_score"].idxmax() == "busy"
+    assert score(_wards(), room)[0]["cafe_score"].idxmax() != "busy"
 
 
-def test_presets_weight_every_component():
-    for weights in PRESETS.values():
-        assert set(weights) == set(COMPONENTS) and sum(weights.values()) > 0
+def test_the_default_weights_cover_every_component():
+    assert set(WEIGHTS) == set(COMPONENTS) and sum(WEIGHTS.values()) > 0
 
 
 def test_wards_with_few_outlets_are_low_confidence():

@@ -18,7 +18,7 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 **Four parts, each shown with its points.** Residents, eating out, daytime draw and low competition. An earlier version folded the first three into one "busyness" number; splitting them lets someone who cares about office workers say so, and every row and drawer shows what each part added.
 
-**The user sets the weights.** Sliders from 0 to 5 for each part, with three presets as starting points. The pipeline publishes the presets, so the site, the chat and the pipeline can't drift apart.
+**Two plain questions set the weights.** "Who are your customers?" and "How much competition can you take?" are questions a cafe founder can answer; "weight daytime draw 3 of 5" isn't. Each customer answer weights the one measure of people that fits it (all three for a mix), and each competition answer sets the low-competition weight. An earlier version weighted the matching part 3 and the others 1; the old city's peths lead on all three, so the answer barely changed the list. Sliders stay behind "Fine-tune" for anyone who wants them.
 
 **Competition against well-mapped wards.** The first version compared each ward with the city median, 0.23 cafes per 10,000 residents, dragged down by 100 wards where OpenStreetMap maps almost nothing; 72% of shortlistable wards then read as "heavy competition". The reference is now the rate across the 40 wards with 10 or more outlets mapped (2.49 cafes per 10,000).
 
@@ -46,28 +46,33 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 ## Front end
 
-**One screen, not a wizard.** The plan's inputs sit above the top 5 and every change, including each slider, re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly.
+**Say what it's for, and what it can't do, where people decide.** An intro states the purpose until it's dismissed, and "Before you decide" sits under every shortlist, not in a drawer, because the limits matter most at the moment of choosing.
+
+**One screen, not a wizard.** The brief sits above the shortlist, and every answer re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly.
+
+**The map shows the score for your brief.** Wards are shaded by their score in fixed bands, so a colour always means the same score, and wards the brief rules out (area, rent, thin data) turn grey with the reason on hover. The competition view is one switch away.
 
 **Every score shows its parts.** Each row shows the points from each of the four parts, which add up to its score, so a ranking is never a bare number.
 
+**Compare, because a shortlist is for choosing.** The top 3 side by side, any column swappable, with the best value in each row marked.
+
 **Plain ES modules, no build step.** The site is a few small modules; a bundler would add a toolchain to install and break.
 
-**The URL is the plan.** Format, weights, area, size and budget live in the hash, so a link reopens the same shortlist.
+**The URL is the brief.** Format, area, answers, size and budget live in the hash, so a copied link reopens the same shortlist. Links from before the brief still open their format and area.
 
 ## Chat
 
-**Gemini writes, Localio decides.** Localio's engine parses each question and computes the answer from the ward data; Gemini only turns those facts into a reply. It never sees anything but the facts for that question, so it can't bring in outside claims about Pune, and every ward it names is checked against the data. This keeps the answers as accurate as the map while reading like a conversation.
+**Localio decides, the AI words it.** Localio's engine parses each question and works out the answer from the ward data; an AI model (Gemini) only turns those facts into a reply. It sees nothing but the facts for that question, so it can't bring in outside claims about Pune, and every ward it names is checked against the data.
 
-**Facts for the plan the question implies.** "Rent there for 400 sq ft" gets cards computed at 400 sq ft, not 300, so Gemini quotes a figure from the data instead of scaling one itself (it once said ₹41,333 where the data says ₹40,700).
+**The site doesn't name the model.** To a user it's Localio's assistant: the answers are Localio's, from Localio's data, and naming a vendor adds nothing to them. The "How it works" drawer says an AI words the replies and can misread a question; the docs name the model for anyone running it.
 
-**Called from the browser, with a fast model first.** The site is static on GitHub Pages, so there's no server to hold the key; the browser calls Gemini directly. `gemini-3.5-flash-lite` answers in about 1.5 seconds; `gemini-3.5-flash` takes over when it's busy. The key is therefore public, so it's a free-tier key restricted to the site's address, with a limit of 8 questions a minute per visitor.
+**Facts for the plan the question implies.** "Rent there for 400 sq ft" gets cards computed at 400 sq ft, not 300, so the model quotes a figure from the data instead of scaling one itself (it once said ₹41,333 where the data says ₹40,700).
 
-**Always a fallback.** No key, a busy model or a reply that fails its checks means the built-in answer, labelled as such. Tests never call the real Gemini: they mock it, to check what it's sent, what's shown, and the fallback.
+**Called from the browser, with a fast model first.** The site is static on GitHub Pages, so there's no server to hold the key. `gemini-3.5-flash-lite` answers first; `gemini-3.5-flash` takes over when it's busy. The key is therefore public, so it's a free-tier key restricted to the site's address, with a limit of 8 questions a minute per visitor.
 
+**Always a fallback.** No key, a busy model or a reply that fails its checks means the engine's own answer. The engine is rule-based: it finds ward names (official titles and the places inside each ward), reads format, area, budget, size and customers from the question, and picks one of a few answer types (a ward, a comparison, why, rent, a ranking, gaps, the method). Tests never call the real model; they mock it.
 
-**In the browser, from the same files.** The chat reads the ward data the map uses, so the two can't disagree; a test checks the chat's top 5 equals the map's for every plan it's asked about. It needs no server, which is what lets the published site be a static page.
-
-**Rules, not a language model.** It finds ward names (official titles and the places inside each ward), reads format, area, budget, size and what matters ("near offices", "low competition") from the question, and picks one of a few answer types: a ward, a comparison, why a ward ranks where it does, rent, a ranking, gaps, or the method. A model would sound more fluent but could state numbers the data doesn't hold; this can't.
+**The same files as the map.** The chat reads the ward data the map uses, so the two can't disagree; a test checks the chat's top 5 equals the map's for every plan it's asked about.
 
 **Refuse instead of guessing.** A question must name a ward or use a domain word (cafe, QSR, rent, ward, and so on). All 11 off-topic test questions are refused.
 
