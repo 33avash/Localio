@@ -18,7 +18,7 @@ export async function open(page, hash = "", { gemini } = {}) {
     });
   }
   await page.goto(`/${hash}`);
-  await page.locator("#panel-body h2").waitFor();
+  await page.locator("#panel-body h2").first().waitFor();
 }
 
 // Centres of the numbered markers, in screen pixels.

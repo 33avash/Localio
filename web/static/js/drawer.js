@@ -1,6 +1,6 @@
 import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
-import { partsBar, weightsName } from "./panel.js";
-import { competitionLevel, monthlyRent, parts, roundedParts, standing } from "./score.js";
+import { partsBar } from "./panel.js";
+import { briefName, competitionLevel, monthlyRent, parts, roundedParts, standing } from "./score.js";
 
 // Menu types in the order the stacked bar draws them, each with a muted
 // colour that stays clear of the teal accent and the density ramp.
@@ -48,10 +48,10 @@ export function drawerHtml(ward, { plan, meta, rent, position }) {
 
     <div class="stats">
       <section class="stat">
-        <h3>Score for a ${c.one}</h3>
+        <h3>Score for your ${c.one}</h3>
         <p class="stat-value"><span class="num">${Math.round(score.total)}</span><span class="stat-unit">/100</span></p>
         ${partsBar(score.items)}
-        <p class="stat-note">${weightsName(plan.weights, meta.score.presets)} · ${standing}</p>
+        <p class="stat-note">${standing}</p>
       </section>
       <section class="stat">
         <h3>Rent for ${num(plan.sqft)} sq ft</h3>
@@ -71,7 +71,10 @@ export function drawerHtml(ward, { plan, meta, rent, position }) {
     </section>
 
     <p class="verdict">${escapeHtml(p.recommendation)}</p>
-    <button class="secondary" data-action="ask-ward" data-value="${escapeHtml(p.name)}">Ask about ${escapeHtml(p.name)}</button>
+    <div class="drawer-actions">
+      <button class="secondary" data-action="compare-with" data-value="${escapeHtml(p.name)}">Compare with your top picks</button>
+      <button class="secondary" data-action="ask-ward" data-value="${escapeHtml(p.name)}">Ask about ${escapeHtml(p.name)}</button>
+    </div>
 
     <footer class="drawer-foot">
       <p>Outlets: ${escapeHtml(meta.vintage.outlets)}. Residents: ${escapeHtml(p.population_method)}.
@@ -108,8 +111,9 @@ function breakdown(p, plan, meta, score) {
         <tbody>${rows.join("")}</tbody>
         <tfoot><tr><th scope="row">Score</th><td></td><td></td><td class="num">${Math.round(score.total)}</td></tr></tfoot>
       </table>
-      <p class="note">Residents, eating out and daytime draw are the ward's standing among Pune's 140 wards. Low
-        competition is 0.5 at the rate in well-mapped wards, higher with fewer.</p>
+      <p class="note">Weights from your brief: ${escapeHtml(briefName(plan.weights))}. Residents, eating out and
+        daytime draw are the ward's standing among Pune's 140 wards. Low competition is 0.5 at the rate in well-mapped
+        wards, higher with fewer.</p>
     </section>`;
 }
 

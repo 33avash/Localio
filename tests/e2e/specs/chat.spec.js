@@ -1,7 +1,8 @@
 // The chat's labelled questions, run against the real data in the browser:
 // named wards must be found, rankings must match the map's own ranking,
 // and off-topic questions must be refused. Every case carries the plan it
-// assumes (the site's default: cafe, Balanced, all of Pune, 300 sq ft).
+// assumes (the site's default: cafe, a mix of customers, some competition,
+// all of Pune, 300 sq ft).
 import { expect, test } from "@playwright/test";
 
 import { open } from "./helpers.js";
@@ -29,17 +30,19 @@ const NAMED = [
 const RANKINGS = [
   ["Where should I open a cafe?", {}],
   ["Where should I open a QSR?", { category: "fast_food" }],
-  ["Best area for a QSR with low competition", { category: "fast_food", lens: "quiet" }],
-  ["Where is footfall strongest for a new cafe?", { lens: "busy" }],
+  ["Best area for a QSR with low competition", { category: "fast_food", competition: "avoid" }],
+  ["Where is footfall strongest for a new cafe?", { customers: "outings", competition: "any" }],
   ["Recommend a locality for a chai stall", {}],
   ["Top places for a pizza outlet", { category: "fast_food" }],
   ["Best place to open a restaurant", {}],
-  ["Which area has the fewest competitors for a QSR?", { category: "fast_food", lens: "quiet" }],
+  ["Which area has the fewest competitors for a QSR?", { category: "fast_food", competition: "avoid" }],
   ["Where would a new fast food outlet do well?", { category: "fast_food" }],
   ["Cafes in PCMC under ₹30k rent", { area: "pcmc", budget: 30000 }],
   ["Best 500 sq ft cafe spot in Pune city", { area: "pmc", sqft: 500 }],
-  ["Where should a cafe near offices go?", { emphasis: "daytime" }],
-  ["Busy residential areas for a QSR", { category: "fast_food", lens: "busy", emphasis: "residents" }],
+  ["Where should a cafe near offices go?", { customers: "offices" }],
+  ["Busy residential areas for a QSR", { category: "fast_food", customers: "locals", competition: "any" }],
+  ["Best spot near colleges under ₹35k rent?", { customers: "offices", budget: 35000 }],
+  ["A quiet spot for families, I'd rather avoid competition", { customers: "locals", competition: "avoid" }],
 ];
 
 const OFF_TOPIC = [
@@ -52,15 +55,16 @@ const OFF_TOPIC = [
 async function ask(page, questions) {
   return page.evaluate(async ({ questions }) => {
     const { reply, wardIndex } = await import("/js/chat.js");
-    const { rank } = await import("/js/score.js");
+    const { COMPETITION, CUSTOMERS, rank } = await import("/js/score.js");
     const [wardsDoc, rent] = await Promise.all(["wards.geojson", "rent.json"].map((f) => fetch(`/data/${f}`).then((r) => r.json())));
     const wards = wardsDoc.features;
-    const { presets } = wardsDoc.meta.score;
-    const plan = { category: "cafe", weights: { ...presets.balanced }, area: "all", sqft: 300, budget: null, includeLow: false };
+    const plan = { category: "cafe", weights: { ...wardsDoc.meta.score.weights }, area: "all", sqft: 300, budget: null, includeLow: false };
     const context = { wards, meta: wardsDoc.meta, rent, plan, ranking: rank(wards, plan, rent), index: wardIndex(wards) };
-    // What a question asks for, as a plan: a preset by name, then one part at the top weight.
-    const planFor = ({ lens, emphasis, ...rest }) => {
-      const weights = { ...(lens ? presets[lens] : plan.weights), ...(emphasis ? { [emphasis]: 5 } : {}) };
+    // What a question asks for, as a plan: the brief's answers it gives, on
+    // top of the default brief.
+    const planFor = ({ customers, competition, ...rest }) => {
+      const weights = { ...plan.weights, ...(customers ? CUSTOMERS[customers].weights : {}),
+        ...(competition ? { room: COMPETITION[competition].room } : {}) };
       return { ...plan, ...rest, weights };
     };
     return questions.map(([q, asked]) => {
@@ -103,8 +107,8 @@ test("a comparison calls a tie a tie", async ({ page }) => {
     const baner = wardsDoc.features.find((f) => f.properties.name === "Baner Balewadi");
     const twin = { ...baner, properties: { ...baner.properties, name: "Twin Ward", aliases: [] } };
     const wards = [baner, twin];
-    const plan = { category: "fast_food", weights: { ...wardsDoc.meta.score.presets.busy }, area: "all", sqft: 300,
-      budget: null, includeLow: false };
+    const plan = { category: "fast_food", weights: { residents: 1, eating_out: 3, daytime: 1, room: 1 }, area: "all",
+      sqft: 300, budget: null, includeLow: false };
     const context = { wards, meta: wardsDoc.meta, rent, plan, ranking: rank(wards, plan, rent), index: wardIndex(wards) };
     return reply("Compare Baner and Twin Ward", context).text;
   });

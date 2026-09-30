@@ -1,8 +1,8 @@
 // The score, as data/localio/score.py defines it:
 //   score = 100 × Σ(weight × component) / Σ(weights)
-// The pipeline ships each ward's four components (0–1) and the presets, so
-// moving any weight re-ranks instantly, with no request. A test checks
-// this file gives the pipeline's scores for every ward.
+// The pipeline ships each ward's four components (0–1), so any change to
+// the brief re-ranks instantly, with no request. A test checks this file
+// gives the pipeline's scores for every ward.
 import { CATEGORIES } from "./format.js";
 
 export const COMPONENTS = [
@@ -30,7 +30,44 @@ export const COMPONENTS = [
   },
 ];
 
-export const PRESET_NAMES = { balanced: "Balanced", busy: "Busy areas", quiet: "Low competition" };
+// The brief turns two plain questions into the four weights. "Who are your
+// customers?" picks the measure of people that counts (all three for a
+// mix); "How much competition?" sets low competition. With "some", people
+// and competition count half each. The default, a mix and some, is the
+// pipeline's WEIGHTS. Any weight can then be fine-tuned with the sliders.
+export const CUSTOMERS = {
+  everyone: { label: "A mix of everyone", hint: "no one group in mind", weights: { residents: 1, eating_out: 1, daytime: 1 } },
+  locals: { label: "People who live nearby", hint: "families and regulars", weights: { residents: 3, eating_out: 0, daytime: 0 } },
+  offices: { label: "Office workers and students", hint: "weekday crowds", weights: { residents: 0, eating_out: 0, daytime: 3 } },
+  outings: { label: "People out to eat", hint: "food streets and evenings", weights: { residents: 0, eating_out: 3, daytime: 0 } },
+};
+
+export const COMPETITION = {
+  avoid: { label: "Avoid it", phrase: "avoiding competition", room: 5 },
+  some: { label: "Some is fine", phrase: "some competition is fine", room: 3 },
+  any: { label: "Don't mind", phrase: "competition doesn't matter", room: 1 },
+};
+
+export const DEFAULT_BRIEF = { customers: "everyone", competition: "some" };
+
+export function weightsFor({ customers, competition }) {
+  return { ...CUSTOMERS[customers].weights, room: COMPETITION[competition].room };
+}
+
+// Which answers these weights match; either is null once fine-tuned away.
+export function briefOf(weights) {
+  const customers = Object.keys(CUSTOMERS).find((key) =>
+    COMPONENTS.slice(0, 3).every((c) => CUSTOMERS[key].weights[c.key] === weights[c.key])) ?? null;
+  const competition = Object.keys(COMPETITION).find((key) => COMPETITION[key].room === weights.room) ?? null;
+  return { customers, competition };
+}
+
+// "office workers and students, avoiding competition", or "your own weights".
+export function briefName(weights) {
+  const { customers, competition } = briefOf(weights);
+  if (!customers || !competition) return "your own weights";
+  return `${CUSTOMERS[customers].label.toLowerCase()}, ${COMPETITION[competition].phrase}`;
+}
 
 export const AREAS = {
   all: "All of Pune",
@@ -78,11 +115,6 @@ export function standing(value) {
   return value >= 0.5 ? `higher than ${Math.round(value * 100)}% of wards` : `lower than ${Math.round((1 - value) * 100)}% of wards`;
 }
 
-// The preset these weights match, if any.
-export function presetOf(weights, presets) {
-  return Object.keys(presets).find((name) => COMPONENTS.every((c) => presets[name][c.key] === weights[c.key])) ?? null;
-}
-
 // Monthly rent for a shop of this size: typical ₹/sq ft × the ward's tier.
 export function monthlyRent(rent, properties, sqft) {
   return Math.round(rent.typical_psf * properties.rent.multiplier * sqft);
@@ -92,11 +124,17 @@ export function monthlyRent(rent, properties, sqft) {
 // mapped are left out unless the plan includes them.
 export function rank(wards, plan, rent) {
   return wards
-    .filter(({ properties: p }) => (plan.includeLow || p.status === "scored")
-      && (plan.area === "all" || p.corporation.toLowerCase() === plan.area)
-      && (!plan.budget || monthlyRent(rent, p, plan.sqft) <= plan.budget))
+    .filter(({ properties: p }) => !leftOut(p, plan, rent))
     .map((feature) => ({ feature, score: parts(feature.properties, plan.category, plan.weights).total }))
     .sort((a, b) => b.score - a.score || a.feature.properties.name.localeCompare(b.feature.properties.name));
+}
+
+// Why the plan leaves a ward out, in words, or null if it's in.
+export function leftOut(properties, plan, rent) {
+  if (plan.area !== "all" && properties.corporation.toLowerCase() !== plan.area) return `outside ${AREAS[plan.area]}`;
+  if (!plan.includeLow && properties.status !== "scored") return "too few outlets mapped to trust";
+  if (plan.budget && monthlyRent(rent, properties, plan.sqft) > plan.budget) return "rent over your budget";
+  return null;
 }
 
 // "none mapped", "light", "average" or "heavy": this format's outlets per

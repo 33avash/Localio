@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from localio import CATEGORIES
-from localio.score import DEFAULT_PRESET, DRAWS, MIN_OUTLETS, PRECISION, PRESETS, UNMAPPED
+from localio.score import DRAWS, MIN_OUTLETS, PRECISION, UNMAPPED, WEIGHTS
 
 
 def pois_collection(pois: pd.DataFrame, menu_types: pd.Series, names: pd.Series) -> dict:
@@ -50,8 +50,7 @@ def wards_collection(scored: pd.DataFrame, pois: pd.DataFrame, menu_mix: pd.Data
         "outlets": int(len(pois)),
         "density_ranges": density_ranges,
         # The score's constants: the site and the chat read them from here.
-        "score": {"presets": PRESETS, "default": DEFAULT_PRESET, "reference_per_10k": reference,
-                  "unmapped": UNMAPPED},
+        "score": {"weights": WEIGHTS, "reference_per_10k": reference, "unmapped": UNMAPPED},
         "vintage": vintage,
         "licence": "Ward boundaries © DataMeet, CC BY-SA 2.5 IN; outlets © OpenStreetMap contributors, ODbL",
     }
@@ -94,7 +93,7 @@ def _ward(key: str, row: pd.Series, menu_mix: pd.DataFrame, tier: pd.Series) -> 
             "per_10k": num(row[f"{c}_per_10k"], 2),
             "density_class": int(row[f"{c}_density_class"]),
             "room": num(row[f"{c}_room"], PRECISION),
-            # At the default preset; the browser recomputes for any weights.
+            # At the default weights; the browser recomputes for any brief.
             "score": num(row[f"{c}_score"], 6),
         } for c in CATEGORIES},
         "rent": {"tier": tier["rent_tier"], "multiplier": float(tier["rent_multiplier"]),

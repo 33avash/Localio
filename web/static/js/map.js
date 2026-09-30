@@ -1,4 +1,4 @@
-import { CATEGORIES, escapeHtml, num } from "./format.js";
+import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
 import { reducedMotion } from "./motion.js";
 import { outletPopup } from "./popups.js";
 
@@ -21,8 +21,17 @@ const COLORS = {
 // the teal accent, so "crowded" never reads as "recommended". Class 0
 // (none yet) is a neutral grey rather than the bottom of the ramp.
 export const DENSITY = ["#D9D7D2", "#F6E3B4", "#EDB65A", "#D9782C", "#A94A1C", "#662611"];
-const ACCENT = "#3D8F7B";
-const ACCENT_STRONG = "#2F7A67";
+// Ink for the top-5 markers, their leader lines and the hovered outline:
+// they must stand out on every green of the score and every rust of
+// competition.
+const INK = "#1A1D21";
+
+// The score for the user's brief, in fixed bands so a colour always means
+// the same score. Pale to deep green: greener is a better fit. Wards the
+// brief leaves out (another area, over budget, thin data) are grey.
+export const FIT = ["#CFE5D8", "#9CCBB2", "#62AC89", "#338766", "#175C45"];
+const FIT_BREAKS = [45, 55, 65, 75];
+const LEFT_OUT = "#CFCDC8";
 
 const POPUP = { className: "localio-popup", minWidth: 240, maxWidth: 290 };
 
@@ -74,6 +83,9 @@ export function createMap(element, { cartoKey, onSelect }) {
   let selected = null;
   let lastView = null;
   let outletsChoice = null;
+  // "fit" colours wards by score for the brief; "competition" by outlets
+  // per 10,000 residents.
+  let mode = "fit";
   // The full breaks start folded; whatever the user picks then sticks.
   let legendOpen = false;
 
@@ -85,6 +97,13 @@ export function createMap(element, { cartoKey, onSelect }) {
       if (!event.target.matches("[data-toggle=outlets]")) return;
       outletsChoice = event.target.checked;
       drawOutlets(lastView);
+    });
+    div.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-mode]");
+      if (!button || button.dataset.mode === mode) return;
+      mode = button.dataset.mode;
+      render(lastView);
+      legend.getContainer().querySelector(`[data-mode="${mode}"]`)?.focus();
     });
     div.addEventListener("toggle", (event) => { legendOpen = event.target.open; }, true);
     return div;
@@ -103,7 +122,7 @@ export function createMap(element, { cartoKey, onSelect }) {
     drawAreas(view);
     drawOutlets(view);
     drawPicks(view);
-    legend.getContainer().innerHTML = legendHtml(view, showOutlets(view), legendOpen);
+    legend.getContainer().innerHTML = legendHtml(view, mode, showOutlets(view), legendOpen);
   }
 
   // Outlet dots are off until the legend's checkbox turns them on: the
@@ -142,25 +161,21 @@ export function createMap(element, { cartoKey, onSelect }) {
   function drawAreas(view) {
     for (const ward of view.wards) {
       const { name } = ward.properties;
-      const dimmed = !view.picks.includes(ward);
-      const area = L.geoJSON(ward, {
-        style: {
-          color: "#FFFFFF",
-          opacity: 0.25,
-          weight: 0.5,
-          fillColor: DENSITY[densityClass(ward, view.category)],
-          fillOpacity: dimmed ? 0.45 : 0.75,
-        },
-      });
+      const fit = view.fit.get(name);
+      const style = mode === "fit"
+        ? { fillColor: fit.out ? LEFT_OUT : FIT[fitClass(fit.score)], fillOpacity: fit.out ? 0.45 : 0.85 }
+        : { fillColor: DENSITY[densityClass(ward, view.category)], fillOpacity: view.picks.includes(ward) ? 0.75 : 0.45 };
+      const area = L.geoJSON(ward, { style: { color: "#FFFFFF", opacity: 0.35, weight: 0.5, ...style } });
+      const text = () => (mode === "fit" ? fitLabel(fit) : plainLabel(ward, view.category));
       area.eachLayer((layer) => {
         if (canHover) {
-          layer.bindTooltip(() => areaLabel(ward, view.category),
+          layer.bindTooltip(() => `<strong>${escapeHtml(name)}</strong><br>${text()}`,
             { sticky: true, direction: "top", offset: [0, -12], className: "area-tip", opacity: 1 });
         }
         layer.on("mouseover", () => layer.setStyle(HIGHLIGHT).bringToFront());
         layer.on("mouseout", () => { if (name !== selected) area.resetStyle(layer); });
         layer.on("click", () => onSelect(name));
-        layer.on("add", () => layer.getElement()?.setAttribute("aria-label", `${name}: ${plainLabel(ward, view.category)}`));
+        layer.on("add", () => layer.getElement()?.setAttribute("aria-label", `${name}: ${text()}`));
         areaLayers.set(name, { area, layer });
       });
       area.addTo(areas);
@@ -235,9 +250,9 @@ export function createMap(element, { cartoKey, onSelect }) {
       const shown = map.containerPointToLatLng(points[i]);
       marker.setLatLng(shown);
       if (map.latLngToContainerPoint(marker.anchor).distanceTo(points[i]) < 2) return;
-      L.polyline([marker.anchor, shown], { color: ACCENT_STRONG, weight: 1, opacity: 0.9, interactive: false }).addTo(leaders);
+      L.polyline([marker.anchor, shown], { color: INK, weight: 1, opacity: 0.9, interactive: false }).addTo(leaders);
       L.circleMarker(marker.anchor, {
-        radius: 2.5, color: "#FFFFFF", weight: 1, fillColor: ACCENT_STRONG, fillOpacity: 1, interactive: false,
+        radius: 2.5, color: "#FFFFFF", weight: 1, fillColor: INK, fillOpacity: 1, interactive: false,
       }).addTo(leaders);
     });
   }
@@ -270,10 +285,14 @@ export function createMap(element, { cartoKey, onSelect }) {
   return { render, fitData, focusWard, highlightPick, resetView, select };
 }
 
-const HIGHLIGHT = { color: ACCENT, opacity: 1, weight: 2 };
+const HIGHLIGHT = { color: INK, opacity: 1, weight: 2.5 };
 
-function areaLabel(ward, category) {
-  return `<strong>${escapeHtml(ward.properties.name)}</strong><br>${plainLabel(ward, category)}`;
+function fitClass(score) {
+  return FIT_BREAKS.filter((limit) => score >= limit).length;
+}
+
+function fitLabel({ score, rent, out }) {
+  return out ? `Left out: ${out}` : `Scores ${Math.round(score)} for your brief · ${rupees(rent)} a month`;
 }
 
 function plainLabel(ward, category) {
@@ -301,9 +320,45 @@ function ensureHatchPattern(map) {
     </defs>`);
 }
 
-// A compact strip with the range's ends, the two marks that aren't
-// colours (top 5 and the hatch), and the full breaks one click away.
-function legendHtml(view, outletsOn, open) {
+// A switch between the two colourings, a compact strip with the range's
+// ends, the marks that aren't colours (top 5, left out, the hatch), and the
+// full breaks one click away.
+function legendHtml(view, mode, outletsOn, open) {
+  const switcher = `
+    <div class="legend-modes" role="group" aria-label="Colour wards by">
+      <button type="button" data-mode="fit" aria-pressed="${mode === "fit"}">Score</button>
+      <button type="button" data-mode="competition" aria-pressed="${mode === "competition"}">Competition</button>
+    </div>`;
+  const outlets = `<label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
+      Show outlets</label>`;
+  if (mode === "fit") return switcher + fitLegend(view, open) + outlets;
+  return switcher + densityLegend(view, open) + outlets;
+}
+
+function fitLegend({ meta, picks }, open) {
+  const bands = FIT.map((colour, i) => {
+    const low = FIT_BREAKS[i - 1];
+    const high = FIT_BREAKS[i];
+    const label = low === undefined ? `under ${high}` : high === undefined ? `${low} and over` : `${low}–${high - 1}`;
+    return { colour, label };
+  });
+  return `
+    <p class="legend-title">Score for your brief</p>
+    <div class="ramp" role="img" aria-label="Colour scale from a score under ${FIT_BREAKS[0]} to ${FIT_BREAKS.at(-1)} and over">${FIT.map((colour) =>
+      `<span style="background:${colour}"></span>`).join("")}</div>
+    <p class="ramp-ends"><span>${num(`&lt;${FIT_BREAKS[0]}`)}</span><span>${num(`${FIT_BREAKS.at(-1)}+`)}</span></p>
+    <ul class="legend-keys">
+      ${picks.length ? legendRow('<span class="swatch top-pick"></span>', "Your top 5") : ""}
+      ${legendRow(swatch(LEFT_OUT), "Left out by your brief")}
+      ${legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_outlets)} outlets: thin data`)}
+    </ul>
+    <details ${open ? "open" : ""}>
+      <summary>All bands</summary>
+      <ul class="legend-breaks">${[...bands].reverse().map((band) => legendRow(swatch(band.colour), num(band.label))).join("")}</ul>
+    </details>`;
+}
+
+function densityLegend(view, open) {
   const { category, meta, picks } = view;
   const ranges = meta.density_ranges[category ?? "total"];
   const present = [0, 1, 2, 3, 4, 5].filter((c) => ranges[c]);
@@ -321,14 +376,12 @@ function legendHtml(view, outletsOn, open) {
     <p class="ramp-ends"><span>${ranges[0] ? "none" : num(ranges[present[0]][0])}</span><span>${num(ranges[top][1])}</span></p>
     <ul class="legend-keys">
       ${picks.length ? legendRow('<span class="swatch top-pick"></span>', "Your top 5") : ""}
-      ${legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_outlets)} outlets: low confidence`)}
+      ${legendRow('<span class="swatch hatch"></span>', `Under ${num(meta.min_outlets)} outlets: thin data`)}
     </ul>
     <details ${open ? "open" : ""}>
       <summary>All breaks</summary>
       <ul class="legend-breaks">${breaks.join("")}</ul>
-    </details>
-    <label class="legend-toggle"><input type="checkbox" data-toggle="outlets" ${outletsOn ? "checked" : ""}>
-      Show outlets</label>`;
+    </details>`;
 }
 
 function swatch(color) {
