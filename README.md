@@ -90,9 +90,7 @@ No keys are needed. Two are optional, set in a `.env` copied from `.env.example`
 
 ## How it's built
 
-```
-db (PostGIS) ──▶ data (Python pipeline, runs once) ──▶ ./output ──▶ web (nginx: map, shortlist, chat)
-```
+![Localio's architecture: seed files go through the data pipeline and its checks into ./output, which nginx and GitHub Pages serve to the browser; the browser asks Gemini to word chat replies from Localio's facts](docs/architecture.png)
 
 - **db** is a throwaway PostGIS database. The pipeline uses it to place every outlet in its ward by boundary (`ST_Contains`).
 - **data** reads `seed_data/`, scores every ward, runs its checks, and writes `wards.geojson`, `pois.geojson` and `rent.json`. If any check fails, it writes nothing and the site doesn't start.

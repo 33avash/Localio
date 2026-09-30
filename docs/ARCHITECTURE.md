@@ -2,40 +2,9 @@
 
 One `docker compose up` goes from committed seed files to a working site. The pipeline runs once and exits; nginx then serves the site and the files the pipeline wrote. The same containers build the published site on GitHub.
 
-```mermaid
-flowchart LR
-    seed["seed_data/<br/>wards, residents, OSM outlets,<br/>rent figures (committed)"]
+![Localio's architecture: seed files go through the data pipeline and its checks into ./output, which nginx and GitHub Pages serve to the browser; the browser asks Gemini to word chat replies from Localio's facts](architecture.png)
 
-    subgraph db["db · postgis/postgis · throwaway"]
-        pg[("PostGIS<br/>tmpfs, no volume")]
-    end
-
-    subgraph data["data · python:3.11-slim · runs once"]
-        direction TB
-        load["load seed files"] --> join["place outlets in wards<br/>ST_Contains"]
-        join --> count["counts, per 10k residents"]
-        count --> score["four score parts,<br/>rent tier, recommendation"]
-        score --> check{"checks"}
-    end
-
-    subgraph out["./output (bind mount)"]
-        files["wards.geojson<br/>pois.geojson<br/>rent.json"]
-    end
-
-    subgraph web["web · nginx:alpine"]
-        site["brief, shortlist, map,<br/>compare and chat, in the browser"]
-    end
-
-    gemini(["AI model (Gemini)<br/>words chat replies from<br/>the facts it's given"])
-
-    seed --> load
-    load <--> pg
-    check -- "all ok" --> files
-    check -- "any fail: exit 1" --> stop(["nothing written,<br/>web never starts"])
-    files -- "read-only" --> web
-    web --> browser(["browser"])
-    browser -. "question + facts" .-> gemini
-```
+The source is [architecture.svg](architecture.svg); edit it and re-export the PNG.
 
 ## Containers
 
