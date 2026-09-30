@@ -39,6 +39,8 @@ services:
     environment:
       # Optional. Set it in .env (see .env.example) to get CARTO Positron tiles.
       LOCALIO_CARTO_KEY: ${LOCALIO_CARTO_KEY:-}
+      # Optional. Set it in .env to have Gemini write the chat's answers.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     volumes:
       - ./output:/srv/localio-data:ro
     depends_on:

@@ -187,8 +187,14 @@ function list({ kind, list: lines }) {
   return `<${tag} class="msg-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</${tag}>`;
 }
 
+const SOURCES = {
+  gemini: "Written by Gemini from Localio's data",
+  fallback: "Gemini didn't answer, so this is Localio's built-in answer",
+  "built-in": "",
+};
+
 function ask(state, { conversation, meta }) {
-  const { messages, draft } = conversation;
+  const { messages, draft, pending, ai } = conversation;
   const p = state.plan;
   const items = messages.map((m, i) => (m.role === "user"
     ? `<li class="msg msg-user">${escapeHtml(m.text)}</li>`
@@ -198,11 +204,12 @@ function ask(state, { conversation, meta }) {
         ${m.wards?.length ? `<div class="chips">${m.wards.map((name) =>
           `<button class="chip" data-action="open-ward" data-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("")}</div>` : ""}
         ${m.plan ? `<button class="secondary compact" data-action="apply" data-value="${i}">Use this plan on the map</button>` : ""}
+        ${SOURCES[m.source] ? `<p class="msg-note">${SOURCES[m.source]}</p>` : ""}
       </li>`));
   const intro = messages.length ? "" : `
     <h2 tabindex="-1">Ask about any ward</h2>
-    <p class="lede">Answers come only from Localio's data, using your plan. Mention a format, area, budget or shop size
-      and I'll use it.</p>
+    <p class="lede">${ai ? "Answers are written by Gemini, from" : "Answers come only from"} Localio's data, using your plan.
+      Mention a format, area, budget, shop size or what matters, and I'll use it.</p>
     <div class="suggestions">${EXAMPLES.map((q) =>
       `<button class="chip" data-action="ask" data-value="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}</div>`;
   return {
@@ -210,12 +217,15 @@ function ask(state, { conversation, meta }) {
       <p class="chat-context">Your plan: ${CATEGORIES[p.category].label} · ${weightsName(p.weights, meta.score.presets)} ·
         ${AREAS[p.area]} · ${num(p.sqft)} sq ft${p.budget ? ` · rent up to ${num(rupees(p.budget))}` : ""}</p>
       ${intro}
-      <ol class="messages" aria-live="polite" aria-label="Conversation">${items.join("")}</ol>`,
+      <ol class="messages" aria-live="polite" aria-label="Conversation">${items.join("")}
+        ${pending ? '<li class="msg msg-answer typing" aria-label="Writing an answer"><span></span><span></span><span></span></li>' : ""}
+      </ol>`,
     foot: `
       <form class="ask-form" data-form="ask">
         <label class="visually-hidden" for="ask-input">Your question</label>
-        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Why is #1 ranked first?">${escapeHtml(draft)}</textarea>
-        <button class="primary" type="submit">Send</button>
+        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Why is #1 ranked first?"
+          ${pending ? "disabled" : ""}>${escapeHtml(draft)}</textarea>
+        <button class="primary" type="submit" ${pending ? "disabled" : ""}>Send</button>
       </form>`,
   };
 }
