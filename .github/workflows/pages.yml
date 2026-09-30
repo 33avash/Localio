@@ -31,12 +31,17 @@ jobs:
         run: docker compose run --rm data
 
       - name: Assemble the site
+        env:
+          # A repository secret. The chat calls Gemini from the browser, so
+          # the key is readable in the published page: restrict it to this
+          # site's address in Google Cloud (see README).
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           mkdir -p site/data
           cp -r web/static/. site/
           cp output/wards.geojson output/pois.geojson output/rent.json site/data/
-          # nginx serves config.json locally; here there's no basemap key.
-          echo '{"cartoKey": ""}' > site/config.json
+          # nginx writes config.json locally; here it's written from the secret.
+          python3 -c "import json, os; print(json.dumps({'cartoKey': '', 'geminiKey': os.environ.get('GEMINI_API_KEY', '')}))" > site/config.json
 
       - uses: actions/configure-pages@v6
 
