@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 import { open } from "./helpers.js";
 
 async function ask(page, question) {
-  await page.getByRole("tab", { name: "Ask" }).click();
+  await page.getByRole("tab", { name: "Analyst" }).click();
   await page.locator("#ask-input").fill(question);
   await page.keyboard.press("Enter");
   return page.locator(".msg-answer").last();

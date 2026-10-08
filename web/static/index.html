@@ -3,40 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Localio · Where to open a cafe or QSR in Pune</title>
-  <meta name="description" content="Planning a cafe or QSR in Pune? Describe your shop and customers, and Localio shortlists the wards to visit first, with the rent to expect.">
+  <title>Localio · Location intelligence for cafes and QSRs in Pune</title>
+  <meta name="description" content="Evaluate where to open your next cafe or QSR in Pune. Localio scores all 140 wards on residents, eating out, daytime draw and competition, estimates the rent, and shows how far to trust each number.">
+  <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/localio.css">
+  <script>
+    // The theme is set before the first paint, so a stored choice never flashes.
+    try {
+      const theme = localStorage.getItem("localio.theme");
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    } catch { /* no storage: follow the system */ }
+  </script>
 </head>
 <body>
+  <a class="skip-link" href="#panel-body">Skip to the analysis</a>
+  <header class="topbar" id="topbar">
+    <a class="wordmark" href="#" data-action="nav" data-value="explore" aria-label="Localio, back to explore">
+      <svg class="wordmark-mark" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.5c-3.6 0-6.5 2.8-6.5 6.4 0 4.6 6.5 10.6 6.5 10.6s6.5-6 6.5-10.6c0-3.6-2.9-6.4-6.5-6.4Z"/><circle cx="10" cy="8" r="2.4"/></svg>
+      <span class="wordmark-text">Localio</span>
+    </a>
+    <nav class="nav" aria-label="Views">
+      <button class="nav-link" data-action="nav" data-value="explore" aria-current="page">Explore</button>
+      <button class="nav-link" data-action="nav" data-value="compare">Compare</button>
+      <button class="nav-link" data-action="nav" data-value="market">Market</button>
+      <button class="nav-link" data-action="method">Methodology</button>
+    </nav>
+    <div class="topbar-tools">
+      <button class="tool search-trigger" data-action="palette" aria-keyshortcuts="Control+K Meta+K" aria-label="Search wards and commands">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+        <span class="search-label">Search</span><kbd>Ctrl K</kbd>
+      </button>
+      <button class="tool" data-action="share-dialog" aria-label="Share analysis">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2.5M5 5.5l3-3 3 3M3.5 9v4.5h9V9"/></svg>
+        <span class="tool-label">Share</span>
+      </button>
+      <button class="tool theme-toggle" data-action="theme" aria-label="Switch theme">
+        <svg class="icon-sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1"/></svg>
+        <svg class="icon-moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z"/></svg>
+      </button>
+    </div>
+  </header>
+
   <aside class="panel" id="panel">
     <button class="sheet-handle" id="sheet-handle" aria-expanded="false" aria-controls="panel"
       aria-label="Expand panel"></button>
     <header class="panel-head">
-      <div class="brand-row">
-        <p class="brand">Localio</p>
-        <button class="text-button" data-action="method">How it works</button>
-      </div>
-      <p class="tagline">Shortlist where to open a cafe or QSR in Pune</p>
-      <div class="tabs" role="tablist" aria-label="Views">
+      <div class="tabs" role="tablist" aria-label="Panel">
         <button class="tab" role="tab" id="tab-plan" aria-controls="panel-body" data-action="tab" data-value="plan">Shortlist</button>
-        <button class="tab" role="tab" id="tab-ask" aria-controls="panel-body" data-action="tab" data-value="ask">Ask</button>
+        <button class="tab" role="tab" id="tab-ask" aria-controls="panel-body" data-action="tab" data-value="ask">Analyst</button>
       </div>
     </header>
-    <div class="panel-body" id="panel-body" role="tabpanel">
-      <div class="skeleton" aria-busy="true" aria-label="Loading Pune's wards">
-        <span class="sk sk-title"></span>
-        <span class="sk sk-line"></span>
-        <span class="sk sk-line sk-short"></span>
-        <span class="sk sk-option"></span>
-        <span class="sk sk-option"></span>
+    <div class="panel-body" id="panel-body" role="tabpanel" tabindex="-1">
+      <div class="loading" aria-busy="true" role="status">
+        <p class="loading-title">Loading Pune's 140 wards</p>
+        <ol class="loading-steps">
+          <li>Ward boundaries and scores</li>
+          <li>Mapped food and drink outlets</li>
+          <li>Rent benchmarks</li>
+        </ol>
       </div>
     </div>
     <footer class="panel-foot" id="panel-foot" hidden></footer>
     <section class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden></section>
   </aside>
   <main id="map" aria-label="Map of Pune's wards"></main>
+  <footer class="statusbar" id="statusbar" aria-label="Data status" hidden></footer>
+
+  <dialog class="palette" id="palette" aria-label="Search wards and commands">
+    <form method="dialog" class="palette-form">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+      <input id="palette-input" type="text" autocomplete="off" spellcheck="false" role="combobox"
+        aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list"
+        placeholder="Search a ward or locality, or type a command (try 50k, QSR, rent)">
+      <kbd>Esc</kbd>
+    </form>
+    <ul class="palette-list" id="palette-list" role="listbox" aria-label="Results"></ul>
+  </dialog>
+
+  <dialog class="sheet-dialog" id="share" aria-labelledby="share-title"></dialog>
+
+  <div class="print-root" id="print-root" aria-hidden="true"></div>
 
   <script>
     // Browsers block module scripts and fetch() on file://, so app.js would

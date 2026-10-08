@@ -7,7 +7,7 @@ import { blockTiles, open } from "./helpers.js";
 
 const WIDTHS = { desktop: [1440, 900], laptop: [1024, 768], phone: [390, 844] };
 // The two tabs, each opened from the default plan.
-const VIEWS = { plan: null, ask: "Ask" };
+const VIEWS = { plan: null, ask: "Analyst" };
 
 for (const [device, [width, height]] of Object.entries(WIDTHS)) {
   for (const [view, tab] of Object.entries(VIEWS)) {
