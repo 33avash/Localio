@@ -26,7 +26,7 @@ from localio.export import pois_collection, wards_collection, write_json
 from localio.menu import mix, tag
 from localio.recommend import sentence
 from localio.score import score
-from localio.validate import Check, check_pois, check_rent, check_scores, check_sentences, check_wards
+from localio.validate import Check, check_pois, check_rent, check_scores, check_sentences, check_sources, check_wards
 
 
 def main() -> int:
@@ -40,6 +40,7 @@ def main() -> int:
         streets = rent.load_streets(sources.load_csv(seed / "rent_high_streets.csv"))
         listings = sources.load_csv(seed / "rent_listings.csv")
         benchmarks = {r["key"]: r for r in sources.load_csv(seed / "rent_benchmarks.csv")}
+        registry = sources.load_registry(seed, {"osm_raw.json": osm_meta, "osm_context.json": context["meta"]})
     except sources.SourceError as err:
         return _fail(str(err))
     _line("OSM", f"{len(raw_pois):,} food and drink places, retrieved {osm_meta['retrieved']}")
@@ -72,7 +73,8 @@ def main() -> int:
     scored["recommendation"] = scored.apply(sentence, axis=1, reference=reference)
     factor = rent.multipliers(streets, float(benchmarks["emerging_multiplier"]["low"]))
     tiers = rent.assign_tiers(scored, street_matches, streets, factor)
-    checks += check_scores(scored) + check_sentences(scored["recommendation"]) + check_rent(tiers, unmatched)
+    checks += (check_scores(scored) + check_sentences(scored["recommendation"]) + check_rent(tiers, unmatched)
+               + check_sources(registry))
     if _finish(checks):
         return 1
 
@@ -82,7 +84,7 @@ def main() -> int:
     outputs = {
         "pois.geojson": pois_collection(pois, menu_types, scored["name"]),
         "wards.geojson": wards_collection(scored, pois, mix(pois, menu_types, scored.index), tiers,
-                                          density_ranges, reference, vintage),
+                                          density_ranges, reference, vintage, registry),
         "rent.json": rent.summary(rent.typical_rent(listings), factor, streets, benchmarks, listings),
     }
     for filename, document in outputs.items():

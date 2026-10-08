@@ -6,44 +6,51 @@
 
 ## 1. Cold start
 - [ ] `git clone https://github.com/33avash/Localio.git`, `cd Localio`, `docker compose up --build`.
-- [ ] The `data` log ends with every check `ok` and three `wrote` lines; `web` reports healthy.
-- [ ] http://localhost:8080 shows a loading skeleton briefly, then the intro, the brief, its top 5, and the wards filling the map.
+- [ ] The `data` log ends with every check `ok` (including `sources`) and three `wrote` lines; `web` reports healthy.
+- [ ] http://localhost:8080 shows "Loading Pune's 140 wards" briefly, then the intro, the site brief, the shortlist, and the wards filling the map.
+- [ ] The status strip under the map shows 140 wards, 1,702 outlets and the build date; the top bar's data pill opens the sources.
 
 ## 2. The brief and the shortlist
-- [ ] The intro says what the site is for. "Got it" hides it, and it stays hidden after a reload.
-- [ ] The top 5 shows straight away, for a cafe, a mix of everyone, some competition, all of Pune, 300 sq ft.
-- [ ] Each row's four parts add up to its score.
-- [ ] Pick "Office workers and students" and "Avoid it": the list re-ranks, scores count to their new values, the summary sentence and URL follow, and the map recolours.
-- [ ] Open "Fine-tune the score" and drag a slider: the shares and the list update as you drag, and the summary says "your own weights".
-- [ ] Type 30000 as the rent: every rent in the list is at most ₹30k, and wards over it turn grey on the map. Type 5000: the list says nothing fits and offers to raise the budget.
-- [ ] "Compare the top 3" shows them side by side; swapping a column's ward updates the table.
-- [ ] "Copy link to this shortlist", then open the link in another browser: the same brief and list.
-- [ ] "Before you decide" lists the limits under the shortlist.
-- [ ] The legend switches the map between "Score" and "Competition".
+- [ ] "Got it" hides the intro, and it stays hidden after a reload.
+- [ ] Each row shows a fit label, a confidence dot, and four parts that add up to its score.
+- [ ] Pick "Office workers and students" and "Avoid it": rows glide to their new places, scores count to their new values, the URL follows, and the map recolours.
+- [ ] Type 35000, then 50000, as the rent ceiling: the "Shortlist change" strip names the change, the wards in and out, and the biggest mover with its reason. Pin it as baseline, change the format, and the strip says "Since your baseline".
+- [ ] Type 5000: "No locations match your brief" offers to raise the ceiling, search all of Pune or include thin data.
+- [ ] "Adjust the model": dragging a slider updates the shares and the list as you drag.
+- [ ] "Decision caveats" lists the limits under the shortlist.
 
-## 3. The drawer
-- [ ] Click a ward on the map, a numbered marker, or a row. The drawer shows its score, a table of its four parts that adds up to it, its rent, where the score comes from, the menu mix and a recommendation.
-- [ ] Open a hatched ward (under 10 outlets). The drawer says its numbers are a lead to check.
-- [ ] "Compare with your top picks" opens the comparison with this ward first.
-- [ ] "Ask about …" switches to Ask and answers about that ward.
+## 3. A ward
+- [ ] Click a row, a marker or a ward on the map. The drawer shows the score and fit, confidence, rent and rent per sq ft; "Why this location" with the case and what to watch; the parts table; economics; how stable the rank is; what draws people; the menu; data quality.
+- [ ] Change the calculator's ticket or days: the sales and orders a day update. It says "Scenario calculation · not a forecast".
+- [ ] A hatched ward (under 10 outlets) says its numbers are a lead to check, and shows Low confidence.
 - [ ] Esc closes the drawer, and focus returns to what opened it.
 
-## 4. Chat
+## 4. Compare, Market, Methodology
+- [ ] Compare shows the top 3 with five verdicts; swapping a column's ward updates the table and the verdicts.
+- [ ] Market shows the KPIs, fit bands, competition (with thin data hatched), rent tiers, coverage and opportunity signals; each signal opens its ward.
+- [ ] Methodology lists every source with its freshness (Census: low; OpenStreetMap: high), and its section links scroll without changing the URL.
+
+## 5. The map
+- [ ] The layer list switches between all seven layers, each with its own legend. In "Fit score", clicking a legend band shows only those wards; clicking it again shows all.
+- [ ] Hovering a shortlist row outlines its ward and lifts its marker. "Show mapped outlets" adds the outlet dots.
+
+## 6. The analyst
 - [ ] With a key set, the typing dots show while an answer is written, and nothing on the page names the model. "Which AI are you?" gets "Localio's assistant".
+- [ ] "Why is Katraj Dairy first?" explains it part by part, and "Show evidence" lists the score, rent, residents, outlets and confidence.
 - [ ] A follow-up ("and the rent there?") answers about the ward just discussed.
-- [ ] "Why is #1 ranked first?" explains the current #1 part by part.
-- [ ] "Best spot near colleges under ₹35k rent?" answers for office workers and students within that rent, and offers the plan.
-- [ ] "Compare Baner and Aundh" compares them for your format.
-- [ ] "Cafes in PCMC under ₹30k rent" lists wards and offers "Use this on the map", which sets it.
-- [ ] A ward chip opens that ward's drawer.
+- [ ] "Cafes in PCMC under ₹30k rent" offers "Use this on the map", which sets it.
 - [ ] "who won the world cup" is refused, with no chips.
 
-## 5. Offline and phone
-- [ ] Turn wifi off after the page loads and pan to a new area. The "Basemap unavailable" notice appears once; everything else keeps working, the chat included.
-- [ ] Narrow the window below 860px. The panel becomes a bottom sheet; dragging its handle resizes the map.
+## 7. Share, search, theme
+- [ ] Share shows the brief and top 5; "Copy link" then open it elsewhere: the same brief and list. "Download CSV" saves the full ranking; "Print brief" prints a one-page brief.
+- [ ] Ctrl K (or /): "katraj" finds Katraj Dairy; "50k" sets the rent ceiling; "dark" switches theme.
+- [ ] The theme toggle switches light and dark, and the choice survives a reload.
 
-## 6. Keyboard only
-- [ ] Without the mouse, Tab through the brief, change it with Enter, open a row, close the drawer with Esc, and switch tabs with the arrow keys.
+## 8. Offline, phone, keyboard, motion
+- [ ] Turn wifi off after the page loads and pan to a new area. The "Basemap unavailable" notice appears once; everything else keeps working.
+- [ ] Below 860px: the map is on top, the analysis in a bottom sheet with a draggable handle, the layer list folds into one button, and no numbered marker starts under the legend.
+- [ ] Without the mouse: Tab through the brief, change it with Enter, open a row, close the drawer with Esc, switch tabs with the arrow keys, and open the palette with Ctrl K.
+- [ ] With "reduce motion" set in the OS, nothing glides, counts or slides.
 
-## 7. The published site
-- [ ] https://33avash.github.io/Localio/ opens on a phone and on another laptop, and the chat answers there too.
+## 9. The published site
+- [ ] https://33avash.github.io/Localio/ opens on a phone and on another laptop, and the analyst answers there too.

@@ -1,9 +1,10 @@
 import { EXAMPLES } from "./chat.js";
 import { CATEGORIES, escapeHtml, num, rupees } from "./format.js";
-import { AREAS, briefOf, COMPETITION, COMPONENTS, CUSTOMERS, monthlyRent, parts, roundedParts } from "./score.js";
+import { confidence, fitBand } from "./insight.js";
+import { AREAS, briefOf, COMPETITION, competitionLevel, COMPONENTS, CUSTOMERS, monthlyRent, parts, roundedParts } from "./score.js";
 
 // The panel has one scrolling body and an optional footer that keeps the
-// chat's input in view. The tabs in the header switch between them.
+// analyst's input in view. The tabs in the header switch between them.
 export function renderPanel({ body, foot, tabs }, state, data) {
   const view = state.tab === "ask" ? ask(state, data) : plan(state, data);
   for (const tab of tabs) {
@@ -38,7 +39,7 @@ export function briefSentence(p) {
     + `${p.budget ? `, rent up to ${num(rupees(p.budget))}` : ""}`;
 }
 
-// ---- Plan: the brief, then the shortlist it produces -----------------------
+// ---- Plan: the site brief, then the shortlist it produces -----------------
 
 const FORMATS = {
   cafe: "coffee, chai, bakery",
@@ -51,25 +52,27 @@ function plan(state, data) {
   const few = data.wards.filter((f) => f.properties.status !== "scored").length;
   return {
     body: `
-      ${state.intro ? intro() : ""}
-      <section class="brief" aria-label="Your brief">
-        ${step(1, "What are you opening?", options("category", p.category,
+      ${state.intro ? intro(data) : ""}
+      <section class="brief" aria-label="Site brief">
+        <div class="brief-head"><p class="eyebrow">Site brief</p>
+          <button class="text-button" data-action="reset">Reset</button></div>
+        ${step("01", "What are you opening?", options("category", p.category,
           Object.fromEntries(Object.entries(CATEGORIES).map(([key, c]) => [key, { label: c.label, hint: FORMATS[key] }])), "formats", "Format"))}
-        ${step(2, "Who are your customers?", options("customers", customers, CUSTOMERS, "customers", "Customers"))}
-        ${step(3, "How much competition can you take?", segmented("competition", competition,
+        ${step("02", "Who are you serving?", options("customers", customers, CUSTOMERS, "customers", "Customers"))}
+        ${step("03", "Competition tolerance", segmented("competition", competition,
           Object.fromEntries(Object.entries(COMPETITION).map(([key, c]) => [key, c.label])), "Competition"))}
-        ${step(4, "Where, and how big?", `
+        ${step("04", "Market constraints", `
           ${segmented("area", p.area, AREAS, "Area")}
           <div class="field-pair">
             <label class="field"><span class="field-label">Shop size</span>
               <span class="input-unit"><input id="sqft" type="number" inputmode="numeric" min="50" max="5000" step="25"
                 value="${p.sqft}"><span>sq ft</span></span></label>
-            <label class="field"><span class="field-label">Rent you can pay a month</span>
+            <label class="field"><span class="field-label">Rent ceiling a month</span>
               <span class="input-unit"><span>₹</span><input id="budget" type="number" inputmode="numeric" min="1000"
-                step="1000" placeholder="any" value="${p.budget ?? ""}"></span></label>
+                step="1000" placeholder="no limit" value="${p.budget ?? ""}"></span></label>
           </div>`)}
         <details class="fine-tune" id="fine-tune" ${state.fineTune ? "open" : ""}>
-          <summary>Fine-tune the score</summary>
+          <summary>Adjust the model</summary>
           ${weightsControl(p.weights)}
           <label class="check"><input id="include-low" type="checkbox" ${p.includeLow ? "checked" : ""}>
             <span>Include the ${num(few)} wards with under ${num(data.meta.min_outlets)} outlets mapped (thin data)</span></label>
@@ -81,14 +84,14 @@ function plan(state, data) {
   };
 }
 
-// What the site is for, until it's dismissed.
-function intro() {
+// What the product is for, until it's dismissed.
+function intro({ wards }) {
   return `
     <section class="intro" aria-labelledby="intro-title">
-      <h2 id="intro-title" class="intro-title">Find where to look first</h2>
-      <p>Planning a cafe or a QSR in Pune? Answer four questions. Localio ranks all 140 wards on the people around and
-        the competition already there, and estimates the rent, so you know which areas to visit first.</p>
-      <p class="intro-small">It can't predict sales, and its data has gaps: see "Before you decide" below the list.</p>
+      <h2 id="intro-title" class="intro-title">Evaluate your next market</h2>
+      <p>Tell Localio what you're opening, who you're serving and what you can spend. It ranks all
+        ${num(wards.length)} wards in Pune on the people around and the competition already there, estimates the rent,
+        and says how far to trust each number.</p>
       <button class="secondary compact" data-action="dismiss-intro">Got it</button>
     </section>`;
 }
@@ -96,7 +99,7 @@ function intro() {
 function step(n, title, control) {
   return `
     <fieldset class="step">
-      <legend class="step-title"><span class="step-n num" aria-hidden="true">${n}</span>${title}</legend>
+      <legend class="step-title"><span class="step-n" aria-hidden="true">${n}</span>${title}</legend>
       ${control}
     </fieldset>`;
 }
@@ -131,7 +134,7 @@ function weightsControl(weights) {
     </label>`);
   return `
     <p class="fine-tune-note">Your answers set how much each part of the score counts. Move a slider to set it
-      yourself.</p>
+      yourself; the share is that part's weight in the score.</p>
     <div class="weight-list">${sliders.join("")}</div>`;
 }
 
@@ -158,12 +161,54 @@ export function renderResults(body, state, data) {
   if (section) section.innerHTML = results(state, data);
 }
 
-function results(state, { wards, rent, ranking }) {
+function results(state, data) {
+  const { wards, ranking } = data;
   const p = state.plan;
   return `
-    <h2 id="results-title" tabindex="-1">Your shortlist</h2>
+    <div class="results-head">
+      <h2 id="results-title" tabindex="-1">Location shortlist</h2>
+    </div>
     <p class="results-sub">For ${briefSentence(p)}. ${num(ranking.length)} of ${num(wards.length)} wards fit.</p>
-    ${ranking.length ? picks(state, { rent, ranking }) : empty(state, { wards, rent })}`;
+    ${state.change ? changesHtml(state.change, state.baseline) : state.baseline ? pinnedHtml() : ""}
+    ${ranking.length ? picks(state, data) : empty(state, data)}`;
+}
+
+// What the last change of brief did to the list, or what the brief has
+// done since the pinned baseline.
+function changesHtml(change, baseline) {
+  const items = [];
+  if (change.count.before !== change.count.after) {
+    items.push(`<li>${num(change.count.before)} → ${num(change.count.after)} wards fit</li>`);
+  }
+  if (change.entered.length) items.push(`<li><span class="delta-in">+${change.entered.length}</span> into the top 5: ${change.entered.map(escapeHtml).join(", ")}</li>`);
+  if (change.exited.length) items.push(`<li><span class="delta-out">−${change.exited.length}</span> out of the top 5: ${change.exited.map(escapeHtml).join(", ")}</li>`);
+  if (change.mover) {
+    const from = change.mover.from ? `#${change.mover.from}` : "outside the list";
+    items.push(`<li>Biggest mover: <strong>${escapeHtml(change.mover.name)}</strong> ${num(from)} → ${num(`#${change.mover.to}`)}. ${escapeHtml(change.mover.reason)}</li>`);
+  }
+  if (!items.length) items.push("<li>The top 5 held.</li>");
+  return `
+    <section class="changes" aria-live="polite" aria-label="Shortlist change">
+      <div class="changes-head">
+        <p class="eyebrow">${baseline ? "Since your baseline" : "Shortlist change"}</p>
+        ${baseline ? '<button class="text-button" data-action="baseline" data-value="clear">Clear baseline</button>'
+          : '<button class="text-button" data-action="baseline" data-value="pin">Pin this as baseline</button>'}
+      </div>
+      <p class="changes-said">${change.said.length ? change.said.map(escapeHtml).join(" · ") : "Same brief"}</p>
+      <ul class="changes-list">${items.join("")}</ul>
+    </section>`;
+}
+
+// A pinned baseline the brief hasn't moved from yet.
+function pinnedHtml() {
+  return `
+    <section class="changes" aria-live="polite" aria-label="Shortlist change">
+      <div class="changes-head">
+        <p class="eyebrow">Baseline pinned</p>
+        <button class="text-button" data-action="baseline" data-value="clear">Clear baseline</button>
+      </div>
+      <p class="changes-said">Change the brief to see how the shortlist moves against this one.</p>
+    </section>`;
 }
 
 // A bar of the score's four parts, each as wide as its points.
@@ -172,21 +217,24 @@ export function partsBar(items) {
     `<span style="width:${item.points.toFixed(1)}%; background:${item.colour}"></span>`).join("")}</span>`;
 }
 
-// Every row states all four parts of its score, so the ranking explains
-// itself; the rent is for the shop size in the brief.
-function picks(state, { rent, ranking }) {
+// Every row states its fit, how far to trust it, and all four parts of its
+// score, so the ranking explains itself; the rent is for the brief's size.
+function picks(state, { rent, ranking, meta }) {
   const { category, weights, sqft } = state.plan;
   const rows = ranking.slice(0, 5).map(({ feature, score }, i) => {
     const p = feature.properties;
     const { items } = parts(p, category, weights);
     const points = roundedParts(items);
+    const conf = confidence(p, meta);
     return `
       <li><button class="pick" data-action="pick" data-value="${i}" data-name="${escapeHtml(p.name)}">
-        <span class="pick-rank num">${i + 1}</span>
+        <span class="pick-rank">${i + 1}</span>
         <span class="pick-main">
-          <span class="pick-head"><span class="pick-name">${escapeHtml(p.name)}${p.status === "scored" ? ""
-            : ' <span class="low-flag">thin data</span>'}</span>
+          <span class="pick-head"><span class="pick-name">${escapeHtml(p.name)}</span>
             <span class="pick-rent num">${rupees(monthlyRent(rent, p, sqft))}/mo</span></span>
+          <span class="pick-meta"><span class="fit-tag">${fitBand(score).label}</span>
+            <span class="conf conf-${conf.level.toLowerCase()}" title="${escapeHtml(conf.summary)}">${conf.level} confidence</span>
+            ${p.status === "scored" ? "" : '<span class="low-flag">thin data</span>'}</span>
           ${partsBar(items)}
           <span class="pick-parts">${items.map((item, j) =>
             `<span><span class="num" data-part="${item.key}">${points[j]}</span> ${item.label.toLowerCase()}</span>`).join("")}</span>
@@ -198,31 +246,36 @@ function picks(state, { rent, ranking }) {
     <ol class="picks">${rows.join("")}</ol>
     <div class="result-actions">
       ${ranking.length >= 2 ? '<button class="secondary compact" data-action="compare">Compare the top 3</button>' : ""}
-      <button class="secondary compact" data-action="share">Copy link to this shortlist</button>
-      <span class="share-status" role="status" id="share-status"></span>
+      <button class="secondary compact" data-action="share-dialog">Share analysis</button>
+      <button class="secondary compact" data-action="export-csv">Export CSV</button>
     </div>
-    <p class="note">Scores are out of 100: the four parts added up. Click a ward for its details.</p>`;
+    <p class="note">Scores are out of 100: the four parts added up. Click a ward for the full analysis.</p>`;
 }
 
-// Says what emptied the list, and offers the smallest change that fixes it.
+// Says what emptied the list, and offers the smallest changes that fix it.
 function empty(state, { wards, rent }) {
   const p = state.plan;
   const open = wards.filter(({ properties: w }) => (p.includeLow || w.status === "scored")
     && (p.area === "all" || w.corporation.toLowerCase() === p.area));
+  const fixes = [];
+  let reason = `No ward in ${AREAS[p.area]} has enough outlets mapped to be confident.`;
   if (p.budget && open.length) {
     const cheapest = Math.min(...open.map(({ properties: w }) => monthlyRent(rent, w, p.sqft)));
-    return `
-      <div class="empty" role="status">
-        <p>No ward's rent fits ${num(rupees(p.budget))} a month for ${num(p.sqft)} sq ft. The cheapest here is
-          ${num(rupees(cheapest))}.</p>
-        <button class="secondary" data-action="set" data-key="budget" data-value="${Math.ceil(cheapest / 1000) * 1000}">
-          Raise the budget to ${rupees(Math.ceil(cheapest / 1000) * 1000)}</button>
-      </div>`;
+    const raise = Math.ceil(cheapest / 1000) * 1000;
+    reason = `No ward's rent fits ${num(rupees(p.budget))} a month for ${num(p.sqft)} sq ft. The cheapest here is ${num(rupees(cheapest))}.`;
+    fixes.push(`<button class="secondary" data-action="set" data-key="budget" data-value="${raise}">Raise the ceiling to ${rupees(raise)}</button>`);
+    const lowest = Math.min(...open.map(({ properties: w }) => w.rent.multiplier));
+    const fits = Math.floor(p.budget / (rent.typical_psf * lowest) / 25) * 25;
+    // Only a size a shop could still work in: at least 100 sq ft and half the brief's.
+    if (fits >= Math.max(100, p.sqft / 2) && fits < p.sqft) fixes.push(`<button class="secondary" data-action="set" data-key="sqft" data-value="${fits}">Look at ${fits} sq ft instead</button>`);
   }
+  if (p.area !== "all") fixes.push('<button class="secondary" data-action="area" data-value="all">Search all of Pune</button>');
+  if (!p.includeLow) fixes.push('<button class="secondary" data-action="set" data-key="includeLow" data-value="true">Include thin-data wards</button>');
   return `
     <div class="empty" role="status">
-      <p>No ward in ${AREAS[p.area]} has enough outlets mapped to be confident.</p>
-      <button class="secondary" data-action="set" data-key="includeLow" data-value="true">Include them anyway</button>
+      <p class="empty-title">No locations match your brief.</p>
+      <p>${reason}</p>
+      <div class="empty-actions">${fixes.join("")}</div>
     </div>`;
 }
 
@@ -230,7 +283,7 @@ function empty(state, { wards, rent }) {
 function limits() {
   return `
     <section class="limits" aria-labelledby="limits-title">
-      <h3 id="limits-title">Before you decide</h3>
+      <h3 id="limits-title" class="eyebrow">Decision caveats</h3>
       <ul>
         <li><strong>Visit first.</strong> The score compares wards from data. It can't see the street, the shop or
           the footfall at your hours.</li>
@@ -240,11 +293,11 @@ function limits() {
         <li><strong>Rent is an estimate</strong> from published rents, not a quote.</li>
         <li><strong>No sales forecast.</strong> Localio says where to look, not what a shop will earn.</li>
       </ul>
-      <button class="text-button" data-action="method">How the score and rent are worked out</button>
+      <button class="text-button" data-action="method">How the score, confidence and rent are worked out</button>
     </section>`;
 }
 
-// ---- Ask: the chat, answering from the same data and the same brief ---------
+// ---- Analyst: answers from the same data and the same brief --------------
 
 // Ranked answers get numbers; reasons and comparisons get bullets.
 function list({ kind, list: lines }) {
@@ -252,8 +305,44 @@ function list({ kind, list: lines }) {
   return `<${tag} class="msg-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</${tag}>`;
 }
 
-function ask(state, { conversation }) {
-  const { messages, draft, pending } = conversation;
+// The figures behind an answer, computed here from the ward data, never
+// taken from the language model's wording.
+function evidence(names, { wards, rent, meta }, plan) {
+  const fmt = CATEGORIES[plan.category];
+  const reference = meta.score.reference_per_10k[plan.category];
+  const blocks = names.map((name) => wards.find((f) => f.properties.name === name)?.properties).filter(Boolean).map((p) => {
+    const { items, total } = parts(p, plan.category, plan.weights);
+    const points = roundedParts(items);
+    const conf = confidence(p, meta);
+    const c = p.categories[plan.category];
+    return `
+      <table class="data-table">
+        <thead><tr><th scope="col" colspan="2" style="text-align:left">${escapeHtml(p.name)}</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Score</th><td class="num">${Math.round(total)} = ${points.join(" + ")}</td></tr>
+          <tr><th scope="row">Rent, ${plan.sqft} sq ft</th><td class="num">${rupees(monthlyRent(rent, p, plan.sqft))}/mo</td></tr>
+          <tr><th scope="row">Residents</th><td class="num">${p.population.toLocaleString("en-US")}</td></tr>
+          <tr><th scope="row">${fmt.label}s mapped</th><td class="num">${c.count} (${c.per_10k.toFixed(2)}/10k; ${competitionLevel(p, plan.category, reference)})</td></tr>
+          <tr><th scope="row">Offices · colleges · stations</th><td class="num">${p.draws.offices} · ${p.draws.colleges} · ${p.draws.stations}</td></tr>
+          <tr><th scope="row">Confidence</th><td>${conf.level}</td></tr>
+        </tbody>
+      </table>`;
+  });
+  if (!blocks.length) return "";
+  const osm = meta.sources?.find((s) => s.id === "outlets");
+  return `
+    <details class="evidence">
+      <summary>Show evidence</summary>
+      <div class="evidence-body">
+        ${blocks.join("")}
+        <p class="evidence-sources">Computed by Localio from the ward data. Sources: OpenStreetMap${osm ? ` (retrieved ${escapeHtml(osm.retrieved_at)})` : ""};
+          Census 2011; Cushman &amp; Wakefield Q2 2026 and Square Yards listings for rent.</p>
+      </div>
+    </details>`;
+}
+
+function ask(state, data) {
+  const { messages, draft, pending } = data.conversation;
   const items = messages.map((m, i) => (m.role === "user"
     ? `<li class="msg msg-user">${escapeHtml(m.text)}</li>`
     : `<li class="msg msg-answer${m.kind === "refuse" ? " msg-refused" : ""}">
@@ -262,11 +351,14 @@ function ask(state, { conversation }) {
         ${m.wards?.length ? `<div class="chips">${m.wards.map((name) =>
           `<button class="chip" data-action="open-ward" data-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("")}</div>` : ""}
         ${m.plan ? `<button class="secondary compact" data-action="apply" data-value="${i}">Use this on the map</button>` : ""}
+        ${m.wards?.length ? evidence(m.wards, data, m.brief ?? state.plan) : ""}
       </li>`));
   const intro = messages.length ? "" : `
+    <p class="eyebrow">Localio Analyst</p>
     <h2 tabindex="-1">Ask about any ward</h2>
-    <p class="lede">Ask in your own words: where to open, why a ward ranks where it does, what rent to expect. Answers
-      come from Localio's ward data and your brief. Click a ward in an answer to check its numbers.</p>
+    <p class="lede">Ask in your own words: where to open, why a ward ranks where it does, how two compare, what rent
+      to expect. Every figure comes from Localio's ward data and your brief, with the evidence one click away. If the
+      data can't answer, it says so.</p>
     <div class="suggestions">${EXAMPLES.map((q) =>
       `<button class="chip" data-action="ask" data-value="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("")}</div>`;
   return {
@@ -279,7 +371,7 @@ function ask(state, { conversation }) {
     foot: `
       <form class="ask-form" data-form="ask">
         <label class="visually-hidden" for="ask-input">Your question</label>
-        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Best spot near colleges under ₹35k rent?"
+        <textarea id="ask-input" rows="2" maxlength="300" placeholder="e.g. Which wards have low competition but strong daytime draw?"
           ${pending ? "disabled" : ""}>${escapeHtml(draft)}</textarea>
         <button class="primary" type="submit" ${pending ? "disabled" : ""}>Send</button>
       </form>`,

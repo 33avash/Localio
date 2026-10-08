@@ -24,7 +24,9 @@ def _copy_seed(seed_dir, tmp_path):
 def test_clean_run_writes_all_three_files(monkeypatch, tmp_path, seed_dir):
     assert _run(monkeypatch, tmp_path, seed_dir) == 0
     assert all((tmp_path / "out" / name).is_file() for name in OUTPUTS)
-    wards = json.loads((tmp_path / "out" / "wards.geojson").read_text(encoding="utf-8"))["features"]
+    document = json.loads((tmp_path / "out" / "wards.geojson").read_text(encoding="utf-8"))
+    assert {entry["id"] for entry in document["meta"]["sources"]} >= {"outlets", "population", "rent_streets"}
+    wards = document["features"]
     assert len(wards) == 140
     for ward in wards:
         p = ward["properties"]

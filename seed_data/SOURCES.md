@@ -11,6 +11,7 @@ Every input the pipeline reads. All of it is committed, so a build never needs t
 | `rent_high_streets.csv` | prime rents for ten Pune high streets, their tier and the wards they run through | Cushman & Wakefield Pune Retail MarketBeat, Q2 2026 |
 | `rent_listings.csv` | 25 Pune shop listings, for the typical rent per sq ft | Square Yards, first page of Pune shop listings, 28 Sep 2026 |
 | `rent_benchmarks.csv` | default shop size, healthy rent share, and the emerging-tier multiplier | DineOpen; the multiplier is marked as an assumption |
+| `sources.json` | the source registry: each dataset's licence, coverage, dates, update frequency and confidence | written by hand; the OpenStreetMap dates are filled from the cached files at build time |
 
 ## How residents per ward are built
 

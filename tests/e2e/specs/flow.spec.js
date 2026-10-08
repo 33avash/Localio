@@ -50,7 +50,7 @@ test("the brief's answers set the weights, and the URL", async ({ page }) => {
   await page.getByRole("radio", { name: "Avoid it" }).click();
   await expect(page).toHaveURL(/#cafe\?for=offices&competition=avoid$/);
   await expect(page.locator(".results-sub")).toContainText("for office workers and students, avoiding competition");
-  await page.getByText("Fine-tune the score").click();
+  await page.getByText("Adjust the model").click();
   await expect(page.locator("[data-share=daytime]")).toHaveText("38%");
   await expect(page.locator("[data-share=residents]")).toHaveText("0%");
   await expect(page.locator("[data-share=room]")).toHaveText("63%");
@@ -59,7 +59,7 @@ test("the brief's answers set the weights, and the URL", async ({ page }) => {
 test("fine-tuning a weight re-ranks the list and makes the weights your own", async ({ page }) => {
   await open(page);
   const before = await names(page);
-  await page.getByText("Fine-tune the score").click();
+  await page.getByText("Adjust the model").click();
   await page.locator("[data-weight=daytime]").fill("5");
   await page.locator("[data-weight=room]").fill("0");
   await expect.poll(() => names(page)).not.toEqual(before);
@@ -118,7 +118,7 @@ test("the rent budget filters the list, and an empty list offers a fix", async (
   await expect(page).toHaveURL(/budget=26000/);
   await page.locator("#budget").fill("5000");
   await expect(page.locator(".empty")).toContainText("No ward's rent fits");
-  await page.locator(".empty button").click();
+  await page.locator(".empty button").first().click();
   await expect(rows(page).first()).toBeVisible();
 });
 
@@ -162,7 +162,7 @@ test("the top 3 can be compared side by side, and a column swapped", async ({ pa
 
 test("a ward's drawer compares it with the top picks", async ({ page }) => {
   await open(page, "#cafe/pmc");
-  await page.getByRole("tab", { name: "Ask" }).click();
+  await page.getByRole("tab", { name: "Analyst" }).click();
   await page.locator("#ask-input").fill("Tell me about Koregaon Park");
   await page.keyboard.press("Enter");
   await page.locator(".msg-answer .chip").click();
@@ -173,7 +173,7 @@ test("a ward's drawer compares it with the top picks", async ({ page }) => {
 
 test("the intro says what the site is for, and stays dismissed", async ({ page }) => {
   await open(page);
-  await expect(page.locator(".intro")).toContainText("Planning a cafe or a QSR in Pune?");
+  await expect(page.locator(".intro")).toContainText("Tell Localio what you're opening");
   await page.getByRole("button", { name: "Got it" }).click();
   await expect(page.locator(".intro")).toHaveCount(0);
   await page.reload();
@@ -191,7 +191,8 @@ test("the limits are stated under the shortlist", async ({ page }) => {
 
 test("the map colours wards by score, or by competition", async ({ page }) => {
   await open(page);
-  await expect(page.locator(".legend-title")).toHaveText("Score for your brief");
+  await expect(page.locator(".legend-title")).toHaveText("Fit score");
+  await page.locator(".layers-toggle").click();
   await page.locator("[data-mode=competition]").click();
   await expect(page.locator(".legend-title")).toHaveText("Cafes per 10k residents");
   await expect(page.locator("[data-mode=competition]")).toHaveAttribute("aria-pressed", "true");
@@ -199,7 +200,9 @@ test("the map colours wards by score, or by competition", async ({ page }) => {
 
 test("the shortlist link can be copied", async ({ page }) => {
   await open(page, "#qsr?for=locals");
-  await page.getByRole("button", { name: "Copy link to this shortlist" }).click();
+  await page.locator(".result-actions [data-action=share-dialog]").click();
+  await expect(page.locator("#share")).toBeVisible();
+  await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page.locator("#share-status")).toHaveText(/Link copied|Copy the link/);
 });
 
@@ -225,14 +228,14 @@ test("the drawer hands a ward to the chat", async ({ page }) => {
   const name = (await names(page))[0];
   await rows(page).first().click();
   await page.locator("[data-action=ask-ward]").click();
-  await expect(page.getByRole("tab", { name: "Ask" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Analyst" })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".msg-answer").last().locator(".chip")).toHaveText([name]);
 });
 
 test("the chat's top 5 matches the shortlist", async ({ page }) => {
   await open(page, "#qsr?competition=avoid");
   const shortlist = await names(page);
-  await page.getByRole("tab", { name: "Ask" }).click();
+  await page.getByRole("tab", { name: "Analyst" }).click();
   await page.locator("#ask-input").fill("Where should I open a QSR?");
   await page.keyboard.press("Enter");
   await expect(page.locator(".msg-answer").last().locator(".chip")).toHaveText(shortlist.map((n) => n.replace(" few outlets", "")));
@@ -240,7 +243,7 @@ test("the chat's top 5 matches the shortlist", async ({ page }) => {
 
 test("a chat answer can set the plan on the map", async ({ page }) => {
   await open(page);
-  await page.getByRole("tab", { name: "Ask" }).click();
+  await page.getByRole("tab", { name: "Analyst" }).click();
   await page.locator("#ask-input").fill("Cafes in PCMC under ₹30k rent");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Use this on the map" }).click();
@@ -250,7 +253,7 @@ test("a chat answer can set the plan on the map", async ({ page }) => {
 
 test("a chat chip opens that ward's drawer", async ({ page }) => {
   await open(page);
-  await page.getByRole("tab", { name: "Ask" }).click();
+  await page.getByRole("tab", { name: "Analyst" }).click();
   await page.locator("#ask-input").fill("Tell me about Koregaon Park");
   await page.keyboard.press("Enter");
   const answer = page.locator(".msg-answer").last();
@@ -261,7 +264,7 @@ test("a chat chip opens that ward's drawer", async ({ page }) => {
 
 test("the chat refuses off-topic questions instead of inventing a ward", async ({ page }) => {
   await open(page);
-  await page.getByRole("tab", { name: "Ask" }).click();
+  await page.getByRole("tab", { name: "Analyst" }).click();
   await page.locator("#ask-input").fill("who won the world cup");
   await page.getByRole("button", { name: "Send" }).click();
   const answer = page.locator(".msg-answer").last();
@@ -277,11 +280,11 @@ test("the keyboard alone changes the plan and switches tabs", async ({ page }) =
   await expect(page.getByRole("radio", { name: "QSR" })).toBeFocused();
   await page.getByRole("tab", { name: "Shortlist" }).focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "Ask" })).toBeFocused();
-  await expect(page.getByRole("tab", { name: "Ask" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Analyst" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Analyst" })).toHaveAttribute("aria-selected", "true");
 });
 
-for (const [label, setup] of [["plan", async () => {}], ["ask", async (page) => page.getByRole("tab", { name: "Ask" }).click()]]) {
+for (const [label, setup] of [["plan", async () => {}], ["ask", async (page) => page.getByRole("tab", { name: "Analyst" }).click()]]) {
   test(`panel text meets 4.5:1 contrast on ${label}`, async ({ page }) => {
     await open(page);
     await setup(page);

@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7e22ce"/>
+    </marker>
+    <marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="40" y="48" font-size="28" font-weight="700" fill="#0f172a">Localio: system architecture</text>
+  <text x="40" y="76" font-size="15" fill="#64748b">One <tspan font-weight="600" fill="#334155">docker compose up</tspan> turns committed seed files into checked data and a static site</text>
+
+  <!-- ===== Row 1: build ===== -->
+  <text x="40" y="118" font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="1.5">1 · BUILD</text>
+
+  <!-- seed_data -->
+  <rect x="40" y="175" width="190" height="130" rx="10" fill="#eef2f7" stroke="#64748b" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#1e293b" font-size="15">
+    <tspan x="135" y="212" font-weight="700" font-family="Consolas, monospace">seed_data/</tspan>
+    <tspan x="135" y="238">wards · residents</tspan>
+    <tspan x="135" y="260">OSM outlets · rents</tspan>
+    <tspan x="135" y="286" font-size="13" font-style="italic" fill="#64748b">committed to the repo</tspan>
+  </text>
+
+  <!-- data container -->
+  <rect x="270" y="110" width="870" height="240" rx="14" fill="#f8fafc" stroke="#0369a1" stroke-width="1.8"/>
+  <text x="292" y="140" font-size="15" fill="#0c4a6e"><tspan font-weight="700">data</tspan> · python:3.11-slim, pandas, shapely · runs once, exits 0 or 1</text>
+
+  <line x1="230" y1="240" x2="293" y2="240" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <g font-size="15" fill="#0c4a6e" text-anchor="middle">
+    <rect x="295" y="190" width="140" height="100" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.5"/>
+    <text><tspan x="365" y="236">load</tspan><tspan x="365" y="258">seed files</tspan></text>
+
+    <rect x="455" y="190" width="160" height="100" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.5"/>
+    <text><tspan x="535" y="226">place outlets</tspan><tspan x="535" y="248">in wards</tspan><tspan x="535" y="272" font-size="13" font-style="italic" font-family="Consolas, monospace">ST_Contains</tspan></text>
+
+    <rect x="635" y="190" width="140" height="100" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.5"/>
+    <text><tspan x="705" y="236">counts per</tspan><tspan x="705" y="258">10k residents</tspan></text>
+
+    <rect x="795" y="190" width="180" height="100" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.5"/>
+    <text><tspan x="885" y="226">4 score parts</tspan><tspan x="885" y="248">rent tier</tspan><tspan x="885" y="270">recommendation</tspan></text>
+
+    <polygon points="1055,185 1117,240 1055,295 993,240" fill="#e0f2fe" stroke="#0369a1" stroke-width="1.5"/>
+    <text x="1055" y="245" font-weight="700">checks</text>
+  </g>
+  <g stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)">
+    <line x1="435" y1="240" x2="453" y2="240"/>
+    <line x1="615" y1="240" x2="633" y2="240"/>
+    <line x1="775" y1="240" x2="793" y2="240"/>
+    <line x1="975" y1="240" x2="991" y2="240"/>
+  </g>
+
+  <!-- db -->
+  <line x1="535" y1="292" x2="535" y2="393" stroke="#475569" stroke-width="1.8" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M430,405 L430,460 A105,11 0 0,0 640,460 L640,405" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+  <ellipse cx="535" cy="405" rx="105" ry="11" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#78350f" font-size="15">
+    <tspan x="535" y="438"><tspan font-weight="700">db</tspan> · PostGIS</tspan>
+    <tspan x="535" y="459" font-size="13">tmpfs: starts empty every run</tspan>
+  </text>
+
+  <!-- any fail -->
+  <line x1="1117" y1="240" x2="1188" y2="240" stroke="#b91c1c" stroke-width="1.8" marker-end="url(#arrowR)"/>
+  <text x="1156" y="230" text-anchor="middle" font-size="13" fill="#b91c1c" font-weight="600">any fail</text>
+  <rect x="1190" y="205" width="370" height="70" rx="35" fill="#fee2e2" stroke="#b91c1c" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#7f1d1d" font-size="15">
+    <tspan x="1375" y="236" font-weight="700">exit 1 · nothing is written</tspan>
+    <tspan x="1375" y="258" font-size="13">web never starts, Pages never publishes</tspan>
+  </text>
+  <text font-size="13" fill="#475569">
+    <tspan x="1192" y="308" font-weight="700" fill="#334155">The checks require</tspan>
+    <tspan x="1192" y="329">140 wards (76 PMC + 64 PCMC) · ≤120k residents each</tspan>
+    <tspan x="1192" y="348">PMC total within 5% of Census 2011 · ≥1,200 outlets</tspan>
+    <tspan x="1192" y="367">scores 0–100 · every ward has a rent tier</tspan>
+  </text>
+
+  <!-- all ok: elbow down to ./output -->
+  <path d="M1055,297 L1055,505 L170,505 L170,558" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="1066" y="410" font-size="13" fill="#15803d" font-weight="600">all ok</text>
+
+  <!-- ===== Row 2: serve ===== -->
+  <text x="40" y="545" font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="1.5">2 · SERVE</text>
+
+  <!-- ./output -->
+  <rect x="40" y="560" width="260" height="150" rx="10" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#78350f" font-size="15">
+    <tspan x="170" y="591" font-weight="700" font-family="Consolas, monospace">./output</tspan>
+    <tspan x="170" y="612" font-size="13">atomic writes · read-only to web</tspan>
+    <tspan x="170" y="641" font-family="Consolas, monospace" font-size="14">wards.geojson</tspan>
+    <tspan x="170" y="663" font-family="Consolas, monospace" font-size="14">pois.geojson</tspan>
+    <tspan x="170" y="685" font-family="Consolas, monospace" font-size="14">rent.json</tspan>
+  </text>
+
+  <!-- serving panel -->
+  <rect x="350" y="552" width="420" height="263" rx="14" fill="#f8fafc" stroke="#15803d" stroke-width="1.8"/>
+  <rect x="375" y="585" width="370" height="85" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#14532d" font-size="15">
+    <tspan x="560" y="620"><tspan font-weight="700">web</tspan> · nginx:alpine</tspan>
+    <tspan x="560" y="644" font-size="13">local: serves the site + /data/ on port 8080</tspan>
+  </text>
+  <rect x="375" y="705" width="370" height="85" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#14532d" font-size="15">
+    <tspan x="560" y="740" font-weight="700">GitHub Pages</tspan>
+    <tspan x="560" y="764" font-size="13">pages.yml runs the pipeline on every push to main</tspan>
+  </text>
+
+  <line x1="300" y1="627" x2="373" y2="627" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <path d="M300,690 L335,690 L335,747 L373,747" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- browser -->
+  <rect x="830" y="590" width="300" height="190" rx="12" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#14532d" font-size="15">
+    <tspan x="980" y="626" font-weight="700" font-size="17">browser</tspan>
+    <tspan x="980" y="655">plan · map · drawer · chat</tspan>
+    <tspan x="980" y="686" font-size="13">score.js re-ranks the 140 wards live</tspan>
+    <tspan x="980" y="712" font-size="13">chat.js computes a grounded answer</tspan>
+    <tspan x="980" y="738" font-size="13">and falls back to it if Gemini fails</tspan>
+  </text>
+  <line x1="745" y1="627" x2="828" y2="655" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="745" y1="747" x2="828" y2="715" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- Gemini -->
+  <rect x="1250" y="600" width="310" height="170" rx="40" fill="#f3e8ff" stroke="#7e22ce" stroke-width="1.5"/>
+  <text text-anchor="middle" fill="#3b0764" font-size="15">
+    <tspan x="1405" y="640" font-weight="700" font-size="17">Google Gemini</tspan>
+    <tspan x="1405" y="666" font-size="13">gemini-3.5-flash-lite,</tspan>
+    <tspan x="1405" y="686" font-size="13">then gemini-3.5-flash</tspan>
+    <tspan x="1405" y="716">writes the reply from</tspan>
+    <tspan x="1405" y="738">Localio's facts only</tspan>
+  </text>
+  <line x1="1130" y1="650" x2="1248" y2="650" stroke="#7e22ce" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrowP)"/>
+  <text x="1190" y="640" text-anchor="middle" font-size="12.5" fill="#6b21a8">question + facts</text>
+  <line x1="1250" y1="725" x2="1132" y2="725" stroke="#7e22ce" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrowP)"/>
+  <text text-anchor="middle" font-size="12.5" fill="#6b21a8">
+    <tspan x="1190" y="745">reply + wards used</tspan>
+    <tspan x="1190" y="762">checked against data</tspan>
+  </text>
+
+  <!-- Legend -->
+  <g font-size="13" fill="#475569">
+    <rect x="40" y="850" width="16" height="16" rx="3" fill="#eef2f7" stroke="#64748b"/><text x="64" y="863">input</text>
+    <rect x="130" y="850" width="16" height="16" rx="3" fill="#e0f2fe" stroke="#0369a1"/><text x="154" y="863">pipeline step</text>
+    <rect x="270" y="850" width="16" height="16" rx="3" fill="#fef3c7" stroke="#b45309"/><text x="294" y="863">stored data</text>
+    <rect x="400" y="850" width="16" height="16" rx="3" fill="#dcfce7" stroke="#15803d"/><text x="424" y="863">serving and UI</text>
+    <rect x="545" y="850" width="16" height="16" rx="3" fill="#f3e8ff" stroke="#7e22ce"/><text x="569" y="863">external service</text>
+    <rect x="690" y="850" width="16" height="16" rx="3" fill="#fee2e2" stroke="#b91c1c"/><text x="714" y="863">failure path</text>
+    <text x="1560" y="863" text-anchor="end">Dashed = runtime network call. Only map tiles and Gemini need the internet.</text>
+  </g>
+</svg>

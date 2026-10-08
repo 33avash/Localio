@@ -2,40 +2,9 @@
 
 One `docker compose up` goes from committed seed files to a working site. The pipeline runs once and exits; nginx then serves the site and the files the pipeline wrote. The same containers build the published site on GitHub.
 
-```mermaid
-flowchart LR
-    seed["seed_data/<br/>wards, residents, OSM outlets,<br/>rent figures (committed)"]
+![Localio's architecture: seed files go through the data pipeline and its checks into ./output, which nginx and GitHub Pages serve to the browser; the browser asks Gemini to word chat replies from Localio's facts](architecture.png)
 
-    subgraph db["db · postgis/postgis · throwaway"]
-        pg[("PostGIS<br/>tmpfs, no volume")]
-    end
-
-    subgraph data["data · python:3.11-slim · runs once"]
-        direction TB
-        load["load seed files"] --> join["place outlets in wards<br/>ST_Contains"]
-        join --> count["counts, per 10k residents"]
-        count --> score["four score parts,<br/>rent tier, recommendation"]
-        score --> check{"checks"}
-    end
-
-    subgraph out["./output (bind mount)"]
-        files["wards.geojson<br/>pois.geojson<br/>rent.json"]
-    end
-
-    subgraph web["web · nginx:alpine"]
-        site["brief, shortlist, map,<br/>compare and chat, in the browser"]
-    end
-
-    gemini(["AI model (Gemini)<br/>words chat replies from<br/>the facts it's given"])
-
-    seed --> load
-    load <--> pg
-    check -- "all ok" --> files
-    check -- "any fail: exit 1" --> stop(["nothing written,<br/>web never starts"])
-    files -- "read-only" --> web
-    web --> browser(["browser"])
-    browser -. "question + facts" .-> gemini
-```
+The source is [architecture.svg](architecture.svg); edit it and re-export the PNG.
 
 ## Containers
 
@@ -54,8 +23,28 @@ flowchart LR
 - **Atomic writes.** The pipeline writes each file to a `.tmp` sibling and then renames it, so nginx never serves half a file.
 - **The browser does the interactive work.** The pipeline ships each ward's four score parts, the default weights and its rent tier. The site turns the user's brief into weights (`web/static/js/score.js`), so any change re-ranks instantly, and the map, the comparison and the chat all work from the same files. A test checks the browser reproduces all 280 of the pipeline's scores.
 - **Offline by default.** Seed data, Leaflet and the fonts are committed. The only runtime network use is map tiles, and the map still works without them.
+- **Provenance travels with the data.** `seed_data/sources.json` lists every dataset; the pipeline fills OpenStreetMap's dates from the cached files, checks every field, and publishes the registry in `wards.geojson` (`meta.sources`).
 
-## The chat
+## The front end
+
+Plain ES modules, no build step, served as they are:
+
+| Module | Job |
+|---|---|
+| `score.js` | the score, the brief's weights, ranking and the rent; mirrors the pipeline exactly |
+| `insight.js` | analysis read from the score: fit bands, confidence, strengths and risks, sensitivity, what changed, market figures, CSV |
+| `app.js` | state, the URL, events, the drawers, the data-status strip |
+| `panel.js` | the site brief, the location shortlist, the analyst's conversation and its evidence |
+| `drawer.js` | one ward: score, case, parts, economics and the scenario calculator, stability, data quality |
+| `compare.js`, `market.js`, `method.js` | the three reading views |
+| `map.js` | Leaflet: seven layers restyled in place, the legend, the top-5 markers, the theme's tiles |
+| `palette.js`, `share.js` | Ctrl K search and commands; the share dialog, CSV and the printed brief |
+| `chat.js`, `llm.js` | the analyst: the rule-based engine, and the assistant that words its answers |
+| `motion.js`, `sheet.js`, `format.js`, `popups.js` | row reordering and counting, the phone's bottom sheet, formatting, outlet popups |
+
+`localio.css` holds the design system: light and dark tokens, a 4px spacing grid, a radius scale of 4–12px, and the type (IBM Plex Sans, with Plex Mono for figures).
+
+## The analyst
 
 Two layers, so answers stay as accurate as the map:
 
@@ -79,4 +68,5 @@ The pipeline refuses to write anything if:
 - there are fewer than 1,200 outlets or 200 cafes, or outlets per 10,000 residents fall outside 2–40,
 - any score is outside 0–100,
 - any recommendation still has an unfilled `{slot}`,
-- any ward has no rent tier.
+- any ward has no rent tier,
+- any dataset in the source registry has a blank field, or appears twice.
