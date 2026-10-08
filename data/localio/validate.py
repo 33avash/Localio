@@ -12,6 +12,7 @@ import pandas as pd
 
 from localio import CATEGORIES
 from localio.score import MIN_OUTLETS
+from localio.sources import REGISTRY_FIELDS
 
 CENSUS_2011_PMC = 3_124_458
 EXPECTED_WARDS = {"PMC": 76, "PCMC": 64}
@@ -87,3 +88,13 @@ def check_sentences(sentences: pd.Series) -> list[Check]:
     bad = int((sentences.str.contains(r"[{}]") | (sentences.str.len() == 0)).sum())
     return [Check("sentences", bad == 0,
                   f"{len(sentences)} written, none with unfilled slots" if bad == 0 else f"{bad} unfilled or empty")]
+
+
+def check_sources(registry: list[dict]) -> list[Check]:
+    """Every dataset is in the registry with every field filled, and none twice."""
+    gaps = [f"{entry.get('id', '?')}.{field}" for entry in registry for field in REGISTRY_FIELDS
+            if not str(entry.get(field, "")).strip()]
+    ids = [entry.get("id") for entry in registry]
+    twice = sorted({i for i in ids if ids.count(i) > 1})
+    shown = f"{len(registry)} datasets, every field filled" if not gaps and not twice         else f"missing {', '.join(gaps[:4])}" + (f"; listed twice: {', '.join(twice)}" if twice else "")
+    return [Check("sources", not gaps and not twice, shown)]

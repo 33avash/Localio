@@ -8,6 +8,7 @@ osm_context.json         colleges, offices, stations and place names (OpenStreet
 rent_high_streets.csv    published prime rents for ten Pune high streets
 rent_listings.csv        a sample of Pune shop listings, for typical rent
 rent_benchmarks.csv      outlet size and healthy rent share, with sources
+sources.json             the source registry: licence, coverage, freshness
 """
 
 import csv
@@ -82,6 +83,26 @@ def load_pois(seed: Path) -> tuple[list[dict], dict]:
 
 def load_context(seed: Path) -> dict:
     return _json(seed / "osm_context.json")
+
+
+# Every registry entry needs all of these; the site shows them as written.
+REGISTRY_FIELDS = ("id", "source_name", "dataset_name", "source_url", "licence", "use", "coverage", "as_of",
+                   "retrieved_at", "update_frequency", "confidence", "notes")
+
+
+def load_registry(seed: Path, cached: dict[str, dict]) -> list[dict]:
+    """The source registry, with "from <file>" dates filled from that cached
+    file's own metadata, so refreshing OpenStreetMap updates them."""
+    entries = _json(seed / "sources.json")["sources"]
+    for entry in entries:
+        for field in ("as_of", "retrieved_at"):
+            value = entry.get(field, "")
+            if value.startswith("from "):
+                meta = cached.get(value.removeprefix("from "))
+                if meta is None:
+                    raise SourceError(f"sources.json: {entry.get('id')} takes {field} from an unknown file: {value}")
+                entry[field] = meta["retrieved"]
+    return entries
 
 
 def load_csv(path: Path) -> list[dict]:

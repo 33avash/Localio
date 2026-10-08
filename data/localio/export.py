@@ -37,7 +37,7 @@ def pois_collection(pois: pd.DataFrame, menu_types: pd.Series, names: pd.Series)
 
 
 def wards_collection(scored: pd.DataFrame, pois: pd.DataFrame, menu_mix: pd.DataFrame, tiers: pd.DataFrame,
-                     density_ranges: dict, reference: dict, vintage: dict) -> dict:
+                     density_ranges: dict, reference: dict, vintage: dict, registry: list[dict]) -> dict:
     features = [
         {"type": "Feature", "geometry": json.loads(row["geojson"]),
          "properties": _ward(key, row, menu_mix, tiers.loc[key])}
@@ -52,6 +52,9 @@ def wards_collection(scored: pd.DataFrame, pois: pd.DataFrame, menu_mix: pd.Data
         # The score's constants: the site and the chat read them from here.
         "score": {"weights": WEIGHTS, "reference_per_10k": reference, "unmapped": UNMAPPED},
         "vintage": vintage,
+        # Every dataset with its licence, coverage and dates, for the site's
+        # methodology and data-quality views.
+        "sources": registry,
         "licence": "Ward boundaries © DataMeet, CC BY-SA 2.5 IN; outlets © OpenStreetMap contributors, ODbL",
     }
     return {"type": "FeatureCollection", "meta": meta, "features": features}

@@ -1,0 +1,103 @@
+{
+ "about": "Every dataset Localio uses. The pipeline publishes this in wards.geojson (meta.sources) and fills the OpenStreetMap dates from the cached files, so a refresh updates them. Confidence is Localio's own assessment; the note says why.",
+ "sources": [
+  {
+   "id": "wards",
+   "source_name": "DataMeet",
+   "dataset_name": "Pune electoral wards (PMC 2012 delimitation, PCMC)",
+   "source_url": "https://github.com/datameet/Pune_wards",
+   "licence": "CC BY-SA 2.5 India",
+   "use": "Ward boundaries, PMC ward titles, 2012 voter rolls",
+   "coverage": "All 140 wards: 76 PMC, 64 PCMC",
+   "as_of": "2012",
+   "retrieved_at": "2026-09-26",
+   "update_frequency": "One-off: the 2012 delimitation",
+   "confidence": "Medium",
+   "notes": "Official boundaries, but PMC redrew its wards in 2017 and absorbed 34 villages in 2017-2021; outlets in those villages fall outside every ward."
+  },
+  {
+   "id": "population",
+   "source_name": "Census of India",
+   "dataset_name": "Census 2011 population totals for PMC and PCMC",
+   "source_url": "https://censusindia.gov.in/",
+   "licence": "Government Open Data Licence - India",
+   "use": "Residents per ward (PMC shared by 2012 voter rolls, PCMC shared equally)",
+   "coverage": "Both corporations; no ward-level count, so each ward gets a share",
+   "as_of": "2011",
+   "retrieved_at": "2026-09-26",
+   "update_frequency": "Decennial; no newer ward-level totals are used",
+   "confidence": "Low",
+   "notes": "Fifteen years old, and PCMC has no voter roll, so its residents per km2 mostly reflect ward size."
+  },
+  {
+   "id": "outlets",
+   "source_name": "OpenStreetMap contributors",
+   "dataset_name": "Food and drink places (cafe, fast_food, restaurant, bakery, ice_cream) via the Overpass API",
+   "source_url": "https://www.openstreetmap.org/copyright",
+   "licence": "ODbL 1.0",
+   "use": "Outlet counts, competition, eating-out density, menu mix",
+   "coverage": "Pune and PCMC bounding box; 40 of 140 wards have 10 or more outlets mapped",
+   "as_of": "from osm_raw.json",
+   "retrieved_at": "from osm_raw.json",
+   "update_frequency": "On demand: docker compose run --rm osm --refresh",
+   "confidence": "Medium",
+   "notes": "Current, but OpenStreetMap misses outlets, most of all in Pimpri-Chinchwad: 'none mapped' is not 'none there'."
+  },
+  {
+   "id": "context",
+   "source_name": "OpenStreetMap contributors",
+   "dataset_name": "Offices, colleges, stations and place names via the Overpass API",
+   "source_url": "https://www.openstreetmap.org/copyright",
+   "licence": "ODbL 1.0",
+   "use": "Daytime draw, ward place names, search",
+   "coverage": "Pune and PCMC bounding box",
+   "as_of": "from osm_context.json",
+   "retrieved_at": "from osm_context.json",
+   "update_frequency": "On demand: docker compose run --rm osm --refresh",
+   "confidence": "Medium",
+   "notes": "Offices are anything tagged office=*; colleges are amenity=college or university; stations are rail stations and halts, metro stations and bus stations."
+  },
+  {
+   "id": "rent_streets",
+   "source_name": "Cushman & Wakefield",
+   "dataset_name": "Pune Retail MarketBeat Q2 2026: prime high-street rents",
+   "source_url": "https://www.cushmanwakefield.com/en/india/insights/pune-marketbeat",
+   "licence": "Published figures, cited",
+   "use": "Rent tiers for ten Pune high streets and the wards they run through",
+   "coverage": "10 streets; 17 wards sit on one, the other 123 take their zone's tier",
+   "as_of": "2026-06-30",
+   "retrieved_at": "2026-09-28",
+   "update_frequency": "Quarterly",
+   "confidence": "Medium",
+   "notes": "Prime ground-floor asking rents; a side street will be cheaper."
+  },
+  {
+   "id": "rent_listings",
+   "source_name": "Square Yards",
+   "dataset_name": "Pune shop listings for rent (first page)",
+   "source_url": "https://www.squareyards.com/rent/shops-for-rent-in-pune",
+   "licence": "Published figures, cited",
+   "use": "Typical rent per sq ft (the median of 25 listings)",
+   "coverage": "25 asking rents across Pune",
+   "as_of": "2026-09-28",
+   "retrieved_at": "2026-09-28",
+   "update_frequency": "Manual",
+   "confidence": "Medium",
+   "notes": "A small sample of asking rents, not agreed rents."
+  },
+  {
+   "id": "benchmarks",
+   "source_name": "DineOpen",
+   "dataset_name": "Restaurant guides: outlet size and healthy rent share",
+   "source_url": "https://www.dineopen.com/blog/restaurant-profit-margins-india-guide.html",
+   "licence": "Published figures, cited",
+   "use": "Default shop size; the 8-15% rent-to-sales band behind 'sales needed'",
+   "coverage": "Industry rule of thumb for Indian cafes and QSRs",
+   "as_of": "2026-03-12",
+   "retrieved_at": "2026-09-28",
+   "update_frequency": "Manual",
+   "confidence": "Medium",
+   "notes": "A planning benchmark, not a measurement of Pune outlets."
+  }
+ ]
+}
