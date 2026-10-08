@@ -1,12 +1,12 @@
 # Localio
 
-**Shortlist where to open a cafe or a QSR in Pune.**
+**Location intelligence for the next outlet: where to open a cafe or a QSR in Pune.**
 
-Picking a neighbourhood comes before picking a shop, and it's usually done on gut feel. Localio makes that first cut with data. Describe what you're opening, who your customers are and what rent you can pay. It ranks all 140 of Pune's wards, estimates the rent in each, and shows exactly why each ward scores what it does. You end up with a short list of areas worth visiting.
+Picking a neighbourhood comes before picking a shop, and it's usually done on gut feel. Localio makes that first cut with data. Describe what you're opening, who you're serving and what rent you can pay. It ranks all 140 of Pune's wards, estimates the rent in each, shows exactly why each ward scores what it does, and says how far to trust each number. You end up with a short list of areas worth visiting, and the evidence behind it.
 
 **Try it:** https://33avash.github.io/Localio/
 
-![Localio: the brief on the left (cafe, a mix of customers, some competition, all of Pune, 300 sq ft) above the top 5 wards, with the map coloured by each ward's score](docs/screenshot.png)
+![Localio: the site brief and location shortlist on the left, each ward with its fit and confidence, and the map of Pune coloured by fit score with the top 5 numbered](docs/screenshot.png)
 
 ## Who it's for
 
@@ -16,11 +16,14 @@ Anyone doing a first-cut site search for a small food business in Pune, such as 
 
 Say you're opening a **300 sq ft coffee bar for students and office workers**, you'd rather not sit next to other cafes, and you can pay **₹35,000 a month** in rent.
 
-1. **Answer the four questions:** Cafe · Office workers and students · Avoid competition · All of Pune, 300 sq ft, ₹35,000.
-2. **Read the shortlist.** Katraj Dairy comes first (79/100): 4 colleges, 8 stations and only 2 cafes mapped, at about ₹31k a month. Pune University (77) and Janwadi-Gokhalenagar (76) would make the top 5 but drop out on rent (₹49k and ₹69k). The map turns green where a ward fits and grey where your brief rules it out.
-3. **Compare** the top 3 side by side: score, each part of it, rent, the sales you'd need, residents, competition.
-4. **Ask** in plain words: *"Why is Katraj Dairy first?"*, *"Compare Baner and Aundh"*, *"Rent there for 400 sq ft?"*. Answers come from the same data, and every ward they name opens on the map.
-5. **Share** the link. It holds the whole brief (`#cafe?for=offices&competition=avoid&budget=35000`), so it opens the same shortlist anywhere.
+1. **Build the site brief:** Cafe · Office workers and students · Avoid competition · All of Pune, 300 sq ft, ₹35,000 rent ceiling.
+2. **Read the location shortlist.** Katraj Dairy comes first (79/100, *High fit*, High confidence): 4 colleges, 8 stations and only 2 cafes mapped, at about ₹31k a month. The map turns green where a ward fits and grey where your brief rules it out.
+3. **Open Katraj Dairy.** *Why this location* lists the case for it and what to watch, each from its own figures. The score breaks into its four parts; *Economics* turns the rent into the sales and orders a day you'd need, on your own assumptions; *How stable is this rank?* re-ranks it under other rent ceilings and competition settings; *Data quality* gives each figure's source, age and trust.
+4. **Change an assumption.** Raise the ceiling to ₹50,000 and the *Shortlist change* strip says what moved: 23 → 35 wards fit, Pune University enters at #3 ("it was left out before: rent over your budget"). Pin a baseline to compare any later brief against it.
+5. **Compare** the top 3 side by side, with a verdict for each trade-off: best for the brief, lowest rent, lowest competition, strongest people numbers, best data coverage.
+6. **See the market:** how all 140 wards spread across fit bands, competition, rent tiers and data coverage for your brief, and the wards with an *opportunity signal*.
+7. **Ask the analyst** in plain words: *"Why is Katraj Dairy first?"*, *"Compare Baner and Aundh"*, *"Rent there for 400 sq ft?"*. Every answer comes from the same data, and *Show evidence* lists the figures behind it.
+8. **Share** the analysis: the link holds the whole brief (`#cafe?for=offices&competition=avoid&budget=35000`), and the shortlist exports as CSV or a printed brief. **Ctrl K** searches any ward or locality and runs any command.
 
 Then go and visit. See [the limits](#limits) for why.
 
@@ -60,6 +63,12 @@ With "some is fine", the people side and the competition side count half each. E
 
 Wards with fewer than 10 outlets mapped are scored but left off the shortlist unless you include them: that few usually means thin mapping, not an empty market.
 
+**Fit** names the score's band, the same bands the map is coloured in: Low (under 45), Fair, Good, Strong, High fit (75+).
+
+**Confidence** says how complete the data behind a ward is, from three signals: 10+ outlets mapped or not; residents shared by the ward's voter roll or an equal share (all of Pimpri-Chinchwad); rent from a published high street or the zone's tier. High: all three solid. Medium: outlets solid, one other weak. Low: thin outlets, or both others weak. Of the 40 well-mapped wards, 10 are High, 18 Medium and 12 Low.
+
+None of these change a score: fit, confidence, strengths and risks, sensitivity and the market view are all read from the same four parts.
+
 ## Limits
 
 The site states these under every shortlist, too.
@@ -69,7 +78,7 @@ The site states these under every shortlist, too.
 - **Residents are 2011 figures** on 2012 wards. Newer areas at the city's edge have grown since.
 - **Rent is an estimate**, not a quote. Tiers come from ten published streets; other wards are estimated from their zone.
 - **No sales forecast.** There's no open data to predict what a shop will earn, so Localio doesn't try.
-- **The chat can misread a question.** Its facts come from the data, but check any ward it names by opening it.
+- **The analyst can misread a question.** Its facts come from the data, but check any ward it names by opening it.
 
 ## Run it yourself
 
@@ -94,9 +103,9 @@ No keys are needed. Two are optional, set in a `.env` copied from `.env.example`
 
 - **db** is a throwaway PostGIS database. The pipeline uses it to place every outlet in its ward by boundary (`ST_Contains`).
 - **data** reads `seed_data/`, scores every ward, runs its checks, and writes `wards.geojson`, `pois.geojson` and `rent.json`. If any check fails, it writes nothing and the site doesn't start.
-- **web** is nginx serving the site (Leaflet and plain JavaScript modules, no build step) and the pipeline's output. Scoring, ranking and comparing happen in the browser, from the same numbers the pipeline wrote.
+- **web** is nginx serving the site (Leaflet and plain JavaScript modules, no build step) and the pipeline's output. Scoring, ranking, comparing and every analysis view happen in the browser, from the same numbers the pipeline wrote.
 
-**The chat** is grounded in the data. Localio's own engine reads the question (the wards it names, the format, area, budget, size, customers) and works out the answer from the ward data. The AI model then only words the reply from those facts. The wards it names are checked against the data, it declines anything off-topic, and if it fails, the engine's own answer is shown. The key is readable in the published page, so restrict it to the site's address in Google Cloud (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-chat)).
+**The analyst** is grounded in the data. Localio's own engine reads the question (the wards it names, the format, area, budget, size, customers) and works out the answer from the ward data. The AI model then only words the reply from those facts. The wards it names are checked against the data, it declines anything off-topic, and if it fails, the engine's own answer is shown. The key is readable in the published page, so restrict it to the site's address in Google Cloud (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-analyst)).
 
 GitHub Actions runs every test on each pull request, and on each push to `main` runs the same pipeline container to publish the site to GitHub Pages.
 
@@ -118,7 +127,7 @@ docs/          architecture, design decisions, licences, the manual QA list
 make verify        # or: bash scripts/verify.sh
 ```
 
-It tears everything down, rebuilds, runs the pipeline's checks, its 34 unit tests and 45 browser tests, and prints a summary:
+It tears everything down, rebuilds, runs the pipeline's checks, its 39 unit tests and 63 browser tests, and prints a summary:
 
 ```
 localio verify
@@ -140,11 +149,13 @@ all checks passed
 | High-street rents | [Cushman & Wakefield](https://www.cushmanwakefield.com/en/india/insights/pune-marketbeat), Q2 2026 | cited figures |
 | Shop listings | [Square Yards](https://www.squareyards.com/rent/shops-for-rent-in-pune), 25 listings | cited figures |
 
+Every dataset is in a source registry ([seed_data/sources.json](seed_data/sources.json)) with its coverage, dates, update frequency and confidence; the pipeline checks it and the site's Methodology view shows it, with each source's freshness.
+
 [docs/DATA_LICENSES.md](docs/DATA_LICENSES.md) lists every source and tool with its terms. The code is MIT licensed.
 
 ## More
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the containers, the pipeline's checks, the chat, publishing
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the containers, the pipeline's checks, the front end, the analyst, publishing
 - [docs/DECISIONS.md](docs/DECISIONS.md): the main design choices and why
 - [docs/QA.md](docs/QA.md): what to check by hand before a demo
 - [seed_data/SOURCES.md](seed_data/SOURCES.md): every input and how to refresh it
