@@ -159,3 +159,4 @@ Every dataset is in a source registry ([seed_data/sources.json](seed_data/source
 - [docs/DECISIONS.md](docs/DECISIONS.md): the main design choices and why
 - [docs/QA.md](docs/QA.md): what to check by hand before a demo
 - [seed_data/SOURCES.md](seed_data/SOURCES.md): every input and how to refresh it
+- [docs/AFTER_CA3.md](docs/AFTER_CA3.md): what changed after the first review
