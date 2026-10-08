@@ -1,4 +1,4 @@
-// Copies the Leaflet, IBM Plex and Instrument Serif files the site needs from node_modules
+// Copies the Leaflet and IBM Plex files the site needs from node_modules
 // into static/vendor/. Run after `npm install` when bumping a version; the
 // copied files are committed so the build never depends on a CDN.
 import { cpSync, mkdirSync, rmSync } from "node:fs";
@@ -15,9 +15,6 @@ const files = {
   "leaflet/images": "leaflet/dist/images",
   "leaflet/LICENSE": "leaflet/LICENSE",
   "fonts/LICENSE": "@fontsource/ibm-plex-sans/LICENSE",
-  "fonts/LICENSE-instrument-serif": "@fontsource/instrument-serif/LICENSE",
-  "fonts/instrument-serif-400.woff2": "@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2",
-  "fonts/instrument-serif-400-italic.woff2": "@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2",
 };
 for (const weight of [400, 500, 600]) {
   files[`fonts/ibm-plex-sans-${weight}.woff2`] = `@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-${weight}-normal.woff2`;
