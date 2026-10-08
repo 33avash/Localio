@@ -33,5 +33,6 @@ Earlier versions used a table of 260 outlets from the Google Places API. Google'
 | nginx | web server | BSD 2-Clause |
 | Leaflet 1.9.4 | the map | BSD 2-Clause |
 | IBM Plex Sans and Mono | typefaces | SIL Open Font License 1.1 |
+| Instrument Serif | display typeface | SIL Open Font License 1.1 |
 | pytest, Playwright, axe-core | tests | MIT, Apache 2.0, MPL 2.0 |
 | GitHub Actions and Pages | checks and the published site | GitHub terms (hosted service) |
