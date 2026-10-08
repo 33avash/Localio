@@ -28,7 +28,7 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 **Wards need 10 outlets to be shortlisted.** With 4, the list was led by wards like Kadakmal Ali Hirabaug, next to Swargate, with 34,000 residents and 4 mapped outlets: gaps in the map, not the market. The other wards stay on the map, hatched.
 
-**Explain the score; don't re-model it.** The redesign added fit labels, confidence, strengths and risks, sensitivity, "what changed" and a market view, and changed no score: all are read from the same four parts (`insight.js`), and the test that the browser reproduces all 280 pipeline scores still holds. A proposed "economics" part (rent inside the score) was left out: rent is a constraint you set, not a quality of the ward, and folding it in would hide the trade-off the compare view now shows.
+**Explain the score; don't re-model it.** Fit labels, confidence, strengths and risks, sensitivity, "what changed" and the market view are all read from the same four parts (`insight.js`). None of them changes a score, and the browser still reproduces all 280 pipeline scores. Rent stays out of the score: it's a constraint you set, not a quality of the ward, and folding it in would hide the trade-off that Compare shows.
 
 **Confidence describes the data, not the ward.** Three signals, each already in the data: outlet coverage, how residents were estimated, and whether rent comes from a published street. A Low-confidence ward can be a fine site; it needs checking on foot. Of the 40 shortlistable wards, 10 are High, 18 Medium and 12 Low, all 12 in Pimpri-Chinchwad, which has no voter roll and no published street.
 
@@ -56,7 +56,7 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 **Say what it's for, and what it can't do, where people decide.** An intro states the purpose until it's dismissed, and the decision caveats sit under every shortlist, not in a drawer, because the limits matter most at the moment of choosing.
 
-**One screen, not a wizard.** The brief sits above the shortlist, and every answer re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly. The redesign kept this: the steps are numbered, but nothing is hidden behind a "generate" button.
+**One screen, not a wizard.** The brief sits above the shortlist, and every answer re-ranks at once. Earlier versions walked through four steps; one screen shows cause and effect directly. The steps are numbered, but nothing is hidden behind a "generate" button.
 
 **Say what changed.** Every change of brief gets a strip naming the change, the wards that entered and left the top 5, and the biggest mover with the reason from the data ("it was left out before: rent over your budget"). A baseline can be pinned to compare later briefs against it.
 
@@ -68,7 +68,7 @@ The main choices behind Localio, and why. Each one is small enough to defend in 
 
 **Compare, because a shortlist is for choosing.** The top 3 side by side, any column swappable, with the best value in each row marked.
 
-**Plain ES modules, no build step.** The site is a few small modules; a bundler would add a toolchain to install and break. The redesign brief suggested React with Motion and 21st.dev components; they were used as references only. The motion it needs (rows gliding to their new rank on a spring curve, scores counting, drawers sliding, layers fading) is about 50 lines of Web Animations and CSS, and all of it stops for anyone who asks for reduced motion.
+**Plain ES modules, no build step.** The site is a few small modules; a bundler would add a toolchain to install and break. React was considered and isn't needed: the motion the site uses (rows sliding to their new rank, scores counting, drawers opening, layers fading) is about 50 lines of Web Animations and CSS, and all of it stops for anyone who asks for reduced motion.
 
 **A ward's drawer covers the panel; reading views widen.** A ward's analysis slides over the panel so its outline stays visible on the map. Compare, Market and Methodology are reading views with tables and charts, so on a large screen they widen over part of the map.
 

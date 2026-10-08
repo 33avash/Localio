@@ -123,7 +123,7 @@ export function sensitivity(name, { wards, plan, rent }) {
   const total = byBudget.length + byCompetition.length;
   let verdict;
   if (!ranks.length) verdict = "Out of the list under every one of these briefs.";
-  else if (top5 === total) verdict = `In the top 5 under all ${total} of these briefs: a robust pick.`;
+  else if (top5 === total) verdict = `In the top 5 under all ${total} of these briefs: a stable pick.`;
   else if (top5 >= total / 2) verdict = `In the top 5 under ${top5} of ${total} briefs: fairly stable.`;
   else verdict = `In the top 5 under ${top5} of ${total} briefs: sensitive to your assumptions.`;
   return { byBudget, byCompetition, verdict };
